@@ -41,6 +41,10 @@ function withOption(look, key, i) {
 // Text someone typed (a room's name), safe inside HTML.
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
+// A labelled drop-down; picking one is handled by `pick` in ui (by the drop-down's name).
+const dropdown = (name, label, value, options) => `<div class="row pick-kind"><span class="desc">${label}</span><select data-sel="${name}" aria-label="${label}">${
+  options.map(([v, text]) => `<option value="${v}"${String(v) === String(value) ? " selected" : ""}>${esc(text)}</option>`).join("")}</select></div>`;
+
 const ui = {
   panel: null,        // "shop" | "pets" | "closet" | "paint" | "record" | "settings" | null
   tab: { shop: "furniture", looks: "top", pets: "adopt" },
@@ -78,9 +82,7 @@ const ui = {
       if (e.key === "Enter" && e.target.id === "roomRename") $("#panelBody [data-act=roomRenameSave]").click();
       if (e.key === "Escape" && e.target.id === "roomRename") { e.stopPropagation(); this.roomEdit = null; this.render(); }
     });
-    $("#panelBody").addEventListener("change", e => {
-      if (e.target.id === "furnGroup") { this.furnGroup = e.target.value; this.render(); $("#panelBody").scrollTop = 0; }
-    });
+    for (const el of ["#panelBody", "#panelTabs"]) $(el).addEventListener("change", e => { if (e.target.dataset.sel) this.pick(e.target.dataset.sel, e.target.value); });
     $("#panelBody").addEventListener("input", e => {
       if (e.target.id === "lookName") this.draft.name = e.target.value;
       if (e.target.id === "petName") {
@@ -255,9 +257,8 @@ const ui = {
         if (rest.length) groups.push(["그 밖의 가구", rest]);
         // A drop-down picks which kind is shown (or all of them).
         const pick = this.furnGroup || "all", shown = pick === "all" ? groups : groups.filter(([name]) => name === pick);
-        return `<div class="row furn-pick"><span class="desc">종류</span><select id="furnGroup" aria-label="가구 종류">
-            <option value="all"${pick === "all" ? " selected" : ""}>전체</option>${groups.map(([name]) => `<option value="${name}"${name === pick ? " selected" : ""}>${name}</option>`).join("")}</select></div>
-          <div class="desc">구매한 가구는 보관함에 들어갑니다. 보관함에 있는 가구는 산 값 그대로 환불할 수 있습니다.</div>`
+        return dropdown("furnGroup", "종류", pick, [["all", "전체"], ...groups.map(([name]) => [name, name])])
+          + `<div class="desc">구매한 가구는 보관함에 들어갑니다. 보관함에 있는 가구는 산 값 그대로 환불할 수 있습니다.</div>`
           + shown.map(([name, items]) => `${pick === "all" ? `<div class="section-label">${name}</div>` : ""}<div class="wares">${items.map(f => this.furnitureWare(f)).join("")}</div>`).join("");
       }
       case "theme": {
@@ -283,7 +284,7 @@ const ui = {
       }
       case "looks": {
         const key = this.tab.looks;
-        const sub = `<div class="tabs sub">${LOOK_SHOP.map(([k, name]) => `<button class="btn${k === key ? " on" : ""}" data-act="looksTab" data-id="${k}">${name}</button>`).join("")}</div>`;
+        const sub = dropdown("looksTab", "종류", key, LOOK_SHOP);
         const wares = LOOK_OPTIONS[key].map((name, i) => {
           if (name === "없음" || !allowedFor(key, i, s.look.gender)) return "";
           const price = cosmeticPrice(key, i), owned = !price || s.unlocked.includes(`${key}:${i}`);
@@ -361,8 +362,7 @@ const ui = {
     const s = game.state;
     if (!s.pets.length) return `<div class="desc">아직 함께 사는 아이가 없습니다. 입양 탭에서 데려올 수 있습니다.</div>`;
     const i = Math.min(this.dressPet || 0, s.pets.length - 1), pet = s.pets[i], [, main, dark] = PETS.kinds[pet.kind].colors[pet.color];
-    const who = s.pets.length > 1 ? `<div class="tabs sub">${s.pets.map((p, k) =>
-      `<button class="btn${k === i ? " on" : ""}" data-act="dressWho" data-id="${k}">${p.name}</button>`).join("")}</div>` : "";
+    const who = s.pets.length > 1 ? dropdown("dressWho", "누구", i, s.pets.map((p, k) => [k, p.name])) : "";
     const wares = PET_ACCESSORIES.map(a => {
       const owned = s.petAcc.includes(a.id), on = pet.acc === a.id;
       return `<div class="ware${on ? " on" : ""}"><div class="pic"><img src="${petSprite(pet.kind + "Sit", main, dark, a.id).toDataURL()}" style="width:${(SPRITES[pet.kind + "Sit"][0].length + 4) * 3}px" alt=""></div>
@@ -410,7 +410,7 @@ const ui = {
   // ---------- closet ----------
 
   closetTabs() {
-    return CLOSET_TABS.map(([id, name]) => `<button class="btn${id === this.closetTab ? " on" : ""}" data-act="closetTab" data-id="${id}">${name}</button>`).join("");
+    return dropdown("closetTab", "고르기", this.closetTab, CLOSET_TABS);
   },
   sections() {
     switch (this.closetTab) {
@@ -926,6 +926,15 @@ const ui = {
     if (i === game.state.cur) return;
     if (room.deco) { this.cancelHeld(); room.deco.selected = null; }
     game.showRoom(i);
+  },
+  // A drop-down was changed.
+  pick(name, v) {
+    if (name === "furnGroup") this.furnGroup = v;
+    if (name === "looksTab") this.tab.looks = v;
+    if (name === "dressWho") this.dressPet = +v;
+    if (name === "closetTab") this.closetTab = v;
+    this.render();
+    $("#panelBody").scrollTop = 0;
   },
   // Change a room's name, in the shop's 방 tab.
   editRoomName(i) {
