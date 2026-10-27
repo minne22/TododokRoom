@@ -747,6 +747,7 @@ const ui = {
     if (!room.deco) return;
     if (room.deco.held) this.cancelHeld();
     room.deco = null;
+    game.settleOwned(game.state);   // anything that went missing while decorating is back in storage
     if (this.panel === "paint") this.close();
     document.body.classList.remove("decorating");
     $("#footNormal").hidden = false; $("#footDeco").hidden = true;

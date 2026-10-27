@@ -24,6 +24,7 @@ function newState() {
     totalKeys: 0,
     days: {},            // "YYYY-MM-DD" -> key presses that day
     owned: {},           // furniture bought but not in any room: id -> count
+    bought: { desk: 1, chair: 1, bed: 1, rug: 1, plant: 1, window: 1 },   // every piece ever had (starters + bought): id -> count
     // Rooms, each with its pieces. Floor pieces: top-left cell (c, r); wall pieces: r = -1. A piece
     // may also have `color` (an index into COLORS; none = its original greys), `a` (turned this
     // many degrees, in tens) and `food` (meals left in a bowl).
@@ -80,14 +81,20 @@ const game = {
     s.look = { hat: 0, glasses: 0, neck: 0, hand: 0, ...s.look };
     s.pets.forEach(p => { p.full ??= 80; p.giftIn ??= PET_CARE.giftEverySec; });
     if (!s.rooms[s.cur]) s.cur = 0;
-    // Up to 0.5.9, putting a selected piece away could lose it. Starter pieces found nowhere in the
-    // home are given back to storage, once.
-    if (!s.recoveredStarters) {
-      const have = id => s.rooms.some(r => r.placed.some(p => p.id === id)) || s.owned[id] > 0;
-      for (const id of ["chair", "bed", "rug", "plant", "window"]) if (!have(id)) s.owned[id] = 1;
-      s.recoveredStarters = true;
-    }
+    this.settleOwned(s);
     this.state = s;
+  },
+  // Furniture is never thrown away, so whatever has been had (s.bought) but is neither in a room
+  // nor in storage (put away wrongly, or still in hand when the app closed) goes back into storage.
+  settleOwned(s) {
+    const have = {};
+    for (const p of s.rooms.flatMap(r => r.placed)) have[p.id] = (have[p.id] || 0) + 1;
+    for (const [id, n] of Object.entries(s.owned)) have[id] = (have[id] || 0) + n;
+    for (const [id, n] of Object.entries(have)) if (!(s.bought[id] >= n)) s.bought[id] = n;
+    for (const [id, n] of Object.entries(s.bought)) {
+      const lost = n - (have[id] || 0);
+      if (lost > 0 && FURNITURE.some(f => f.id === id && !f.fixed)) s.owned[id] = (s.owned[id] || 0) + lost;
+    }
   },
   // A made-up, well-furnished home for checking the art; never saved.
   loadDemo(s) {
@@ -189,6 +196,7 @@ const game = {
     const f = FURNITURE.find(x => x.id === id);
     if (!f || f.fixed || !this.pay(f.price)) return false;
     this.state.owned[id] = (this.state.owned[id] || 0) + 1;
+    this.state.bought[id] = (this.state.bought[id] || 0) + 1;
     this.emit("change");
     return true;
   },
