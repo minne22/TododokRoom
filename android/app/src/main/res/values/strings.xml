@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">토도독 룸</string>
+    <string name="title_activity_main">토도독 룸</string>
+    <string name="package_name">com.todok.room</string>
+    <string name="custom_url_scheme">com.todok.room</string>
+    <string name="typing_service_label">토도독 룸 타자 세기</string>
+    <string name="typing_service_description">다른 앱에서 입력할 때마다 토독을 쌓습니다. 글자가 바뀌었다는 사실만 세고, 입력한 내용은 읽거나 저장하거나 보내지 않습니다.</string>
+</resources>

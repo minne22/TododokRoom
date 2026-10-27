@@ -1,0 +1,5 @@
+node_modules/
+dist/
+dist-check/
+# made from src/ by scripts/build-phone.js
+www/

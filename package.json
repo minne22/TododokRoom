@@ -1,0 +1,73 @@
+{
+  "name": "todokroom",
+  "productName": "토도독 룸",
+  "version": "0.5.5",
+  "description": "화면 모서리에 띄워 두는 타자 소리 방꾸미기",
+  "author": "토도독",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never",
+    "phone": "node scripts/build-phone.js && cap sync android",
+    "phone:apk": "npm run phone && cd android && gradlew assembleDebug",
+    "dist:duck": "node scripts/build-duck.js",
+    "release": "electron-builder --win --publish always"
+  },
+  "private": true,
+  "type": "commonjs",
+  "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11",
+    "galmuri": "^2.40.3",
+    "uiohook-napi": "^1.5.5"
+  },
+  "build": {
+    "appId": "com.todok.room",
+    "productName": "토도독 룸",
+    "artifactName": "TodokRoom-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "!src/phone/**",
+      "package.json",
+      "!node_modules/galmuri/dist/*.{ttf,bdf}",
+      "!node_modules/galmuri/dist/*.css"
+    ],
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "토도독 룸",
+      "createDesktopShortcut": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "minne22",
+        "repo": "TododokRoom",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/minne22/TododokRoom.git"
+  }
+}

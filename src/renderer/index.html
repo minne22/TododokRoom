@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'">
+<title>토도독 룸</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- A thin bar to move the window by, with the window buttons. -->
+<header id="bar">
+  <img class="app-icon" src="../icon.png" alt="">
+  <span class="app-name">토도독 룸</span>
+  <span class="grow"></span>
+  <button class="ico" id="pinBtn" aria-label="항상 위에 표시"><img id="pinIcon" alt=""></button>
+  <button class="ico" id="setBtn" aria-label="설정"><img id="gearIcon" alt=""></button>
+  <button class="ico" id="minBtn" aria-label="최소화">_</button>
+  <button class="ico" id="closeBtn" aria-label="닫기">×</button>
+</header>
+
+<!-- Shop, closet, record and settings open here; the window grows upward to make room. -->
+<section id="panel" hidden>
+  <div class="panel-head"><b id="panelTitle"></b><span id="panelExtra"></span><span class="grow"></span><button class="btn x" id="panelClose" aria-label="닫기">×</button></div>
+  <div class="tabs" id="panelTabs"></div>
+  <div class="panel-body" id="panelBody"></div>
+  <div class="panel-foot" id="panelFoot" hidden></div>
+</section>
+
+<main id="stage">
+  <canvas id="room"></canvas>
+  <!-- With more than one room: which one is on screen, and where the character is. -->
+  <div id="roomBar" hidden><button class="rb" data-room="-1" aria-label="이전 방">◀</button><b id="roomName"></b><button class="rb" data-room="1" aria-label="다음 방">▶</button></div>
+  <button id="whereMe" hidden data-tip="캐릭터가 있는 방으로"></button>
+  <div id="toasts" aria-live="polite"></div>
+</main>
+
+<!-- Phone app only: somewhere to type with the on-screen keyboard. -->
+<textarea id="pad" hidden placeholder="여기에 아무거나 입력해 보세요. 한 글자마다 토독이 쌓입니다." spellcheck="false"></textarea>
+
+<footer id="foot">
+  <div class="normal" id="footNormal">
+    <span class="points" id="pointsTip"><img id="tokIcon" alt=""><b id="points">0</b></span>
+    <span class="today" id="today" data-tip="오늘 입력한 키 수"></span>
+    <span class="grow"></span>
+    <button class="ico" data-open="deco" data-tip="꾸미기 (집 · 캐릭터)"><img id="decoIcon" alt="꾸미기"></button>
+    <button class="ico" data-open="shop" data-tip="상점"><img id="shopIcon" alt="상점"></button>
+    <button class="ico" data-open="pets" data-tip="반려동물"><img id="petsIcon" alt="반려동물"></button>
+    <button class="ico" data-open="record" data-tip="기록"><img id="recordIcon" alt="기록"></button>
+    <button class="ico" id="musicBtn"><img id="musicIcon" alt="배경음"></button>
+  </div>
+  <!-- While decorating the room: house / character, then storage, or what to do with the piece
+       clicked on, and done. -->
+  <div class="deco" id="footDeco" hidden>
+    <div class="seg mode"><button class="btn small on" data-mode="house">집</button><button class="btn small" data-mode="me">캐릭터</button></div>
+    <div class="storage" id="storage"></div>
+    <span class="sel-name" id="selName" hidden></span>
+    <button class="btn small" id="moveBtn" hidden>옮기기</button>
+    <button class="btn small" id="paintBtn">꾸미기 창</button>
+    <button class="btn small" id="storeBtn" hidden>보관</button>
+    <button class="btn small on" id="decoDone">완료</button>
+  </div>
+</footer>
+<div id="tip" hidden></div>
+
+<script src="edition.js"></script>
+<script src="data.js"></script>
+<script src="sprites.js"></script>
+<script src="furniture.js"></script>
+<script src="character.js"></script>
+<script src="game.js"></script>
+<script src="room.js"></script>
+<script src="ambient.js"></script>
+<script src="music.js"></script>
+<script src="sounds.js"></script>
+<script src="audio.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>
