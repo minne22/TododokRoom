@@ -258,6 +258,7 @@ function seats(rm) {
     return desk && spot[0] === desk[0] && spot[1] === desk[1] ? [] : [{ spot, dir: f.sit[2] }];
   });
 }
+const REST_AFTER_MS = 20000;   // with no typing for this long, the character goes to bed for a rest
 const roomWith = id => game.state.rooms.findIndex(r => r.placed.some(p => p.id === id));
 
 const actor = {
@@ -278,7 +279,8 @@ const actor = {
     const deskAt = roomWith("desk"), bedAt = roomWith("bed");
     const seat = deskAt >= 0 && deskSeat(rooms[deskAt]);
     if (typing && seat) goal = { at: deskAt, doing: "type", dir: seat.dir };
-    else if (isNight() && bedAt >= 0) goal = { at: bedAt, doing: "sleep", dir: "down" };
+    // Not typing for a while (or night): lie down in bed and rest.
+    else if ((isNight() || performance.now() - game.lastKey > REST_AFTER_MS) && bedAt >= 0) goal = { at: bedAt, doing: "sleep", dir: "down" };
     if (goal && goal.at !== this.at) {
       if (this.then !== "leave" || this.to !== goal.at) this.travel(goal.at);
     } else if (goal) {
@@ -669,7 +671,7 @@ const room = {
     g.restore();
     r(G5, x + 1, y + 9, 14, 18); r(G6, x + 1, y + 9, 14, 2); r(G4, x + 1, y + 26, 14, 1);
     for (let k = 0; k < 3; k++) r(G4, x + 1, y + 15 + k * 4, 14, 1);
-    if (Math.random() < dtChance(0.6)) this.float("z", x + 12, y - 2);
+    if (Math.random() < dtChance(isNight() ? 0.6 : 0.2)) this.float(isNight() ? "z" : "~", x + 12, y - 2);   // asleep, or just resting
   },
   // Kibble in a bowl: fuller bowls are heaped higher.
   drawFood(g, x, y, n) {
