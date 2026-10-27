@@ -14,9 +14,10 @@
 
 - 실행: `npm start` (VS Code 터미널에서는 `ELECTRON_RUN_AS_NODE`를 지우고 실행)
 - 설치 파일만 만들기: `npm run dist` → `dist/TodokRoom-Setup-<버전>.exe`
-- 새 버전 내기: `package.json`의 `version`을 올리고 `GH_TOKEN`(예: `gh auth token`)을 둔 채 `npm run release`.
-  설치 파일과 `latest.yml`이 GitHub 릴리스로 올라가고, 설치된 앱들이 그걸 보고 업데이트한다.
-- 오리 에디션(친구용, 오리 두 종류 입양): `npm run dist:duck` → `dist/TodokRoom-Duck-Setup-<버전>.exe`.
+- 새 버전 내기: `package.json`의 `version`을 올리고 커밋·푸시한 뒤 `npm run release`(GitHub CLI 로그인 필요).
+  릴리스를 만들고 설치 파일·`latest.yml`을 올린 다음, 올라간 `latest.yml`이 설치 파일과 맞는지 확인한다.
+  설치된 앱들은 그 `latest.yml`을 보고 업데이트한다.
+- 오리 에디션(친구용, 오리 두 종류 입양): `npm run dist:duck` → `dist/duck/TodokRoom-Duck-Setup-<버전>.exe`.
   릴리스로 올리지 않고, 스스로 업데이트하지도 않는다(`src/renderer/edition.js`, `scripts/build-duck.js`).
 - 스냅샷 확인: `TODOK_SNAPSHOT=<png>`, `TODOK_DEMO=1`(가구가 갖춰진 가짜 저장), `TODOK_EVAL=<js>`, `TODOK_DELAY=<ms>`
 

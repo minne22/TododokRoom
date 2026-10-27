@@ -11,7 +11,7 @@
     "phone": "node scripts/build-phone.js && cap sync android",
     "phone:apk": "npm run phone && cd android && gradlew assembleDebug",
     "dist:duck": "node scripts/build-duck.js",
-    "release": "electron-builder --win --publish always"
+    "release": "node scripts/release.js"
   },
   "private": true,
   "type": "commonjs",
