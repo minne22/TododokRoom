@@ -200,7 +200,9 @@ body.decorating #room { cursor: pointer; touch-action: none; }   /* dragging pie
   background: rgba(255, 255, 255, .85); border: 2px solid var(--ink); line-height: 1.4; font-size: 11px; }
 #roomBar b { padding: 0 6px; min-width: 40px; text-align: center; cursor: pointer; }
 .room-row { gap: 3px; padding: 2px 0; }
-.furn-jump { position: sticky; top: -1px; z-index: 1; display: flex; flex-wrap: wrap; gap: 3px; padding: 3px 0; background: var(--bar); }
+.furn-pick { gap: 6px; }
+.furn-pick select { flex: 1; min-width: 0; height: 22px; padding: 0 4px; border: 2px solid var(--ink); background: var(--btn); color: var(--text); font: inherit; font-size: 11px; }
+.ware-btns { display: flex; gap: 3px; justify-content: center; flex-wrap: wrap; }
 .room-row input { flex: 1; min-width: 0; font: inherit; border: 2px solid var(--ink); padding: 1px 4px; background: var(--btn); color: var(--text); }
 .rb { border: 0; background: none; font: inherit; font-size: 9px; padding: 1px 4px; cursor: pointer; color: var(--text); }
 .rb:hover { background: var(--btn-hover); }

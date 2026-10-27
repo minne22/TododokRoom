@@ -15,7 +15,7 @@ const priceHtml = p => `<span class="price${game.state.points < p ? " short" : "
 const buyBtn = (label, act, id, price) => `<button class="btn small buy" data-act="${act}" data-id="${id}" data-price="${price}"${game.state.points < price ? " disabled" : ""}>${label}</button>`;
 
 const BAR_H = 24, FOOT_H = 32, BORDER = 4;
-const panelHeight = () => (game.state.settings.zoom >= 3 ? 330 : 290);
+const panelHeight = () => (game.state.settings.zoom >= 4 ? 400 : game.state.settings.zoom >= 3 ? 330 : 290);
 
 // ---------------------------------------------------------------------------------------------
 // Character look helpers (shared by the closet and the shop).
@@ -78,6 +78,9 @@ const ui = {
       if (e.key === "Enter" && e.target.id === "roomRename") $("#panelBody [data-act=roomRenameSave]").click();
       if (e.key === "Escape" && e.target.id === "roomRename") { e.stopPropagation(); this.roomEdit = null; this.render(); }
     });
+    $("#panelBody").addEventListener("change", e => {
+      if (e.target.id === "furnGroup") { this.furnGroup = e.target.value; this.render(); $("#panelBody").scrollTop = 0; }
+    });
     $("#panelBody").addEventListener("input", e => {
       if (e.target.id === "lookName") this.draft.name = e.target.value;
       if (e.target.id === "petName") {
@@ -139,7 +142,14 @@ const ui = {
   // On the phone the page fills the screen and the room is scaled to its width instead.
   layout() {
     if (PHONE) return room.setZoom(phoneZoom());
-    const z = game.state.settings.zoom, panelH = this.panel ? panelHeight() : 0;
+    // As big as chosen, but never bigger than the screen, leaving room for at least a short panel
+    // (so it doesn't jump when one opens); a big room gets a panel as tall as fits.
+    const roomH = z => BORDER + BAR_H + RH * z + FOOT_H;
+    const fits = z => RW * z + BORDER <= screen.availWidth && roomH(z) + 290 <= screen.availHeight;
+    let z = game.state.settings.zoom;
+    while (z > 2 && !fits(z)) z--;
+    if (room.zoom !== z) room.setZoom(z);
+    const panelH = this.panel ? Math.min(panelHeight(), Math.max(290, screen.availHeight - roomH(z))) : 0;
     $("#panel").style.flex = `0 0 ${panelH}px`;
     host.setSize(RW * z + BORDER, BORDER + BAR_H + panelH + RH * z + FOOT_H);
   },
@@ -243,10 +253,12 @@ const ui = {
         const groups = FURN_GROUPS.map(([name, ids]) => [name, ids.map(id => FURNITURE.find(f => f.id === id)).filter(Boolean)]);
         const rest = FURNITURE.filter(f => !f.fixed && !f.pet && !listed.has(f.id));
         if (rest.length) groups.push(["그 밖의 가구", rest]);
-        // Buttons along the top jump to each kind.
-        return `<div class="furn-jump">${groups.map(([name], i) => `<button class="btn small" data-act="furnJump" data-id="${i}">${name}</button>`).join("")}</div>
-          <div class="desc">구매한 가구는 보관함에 들어갑니다. 아래의 꾸미기 버튼으로 배치할 수 있습니다.</div>`
-          + groups.map(([name, items], i) => `<div class="section-label" id="fg${i}">${name}</div><div class="wares">${items.map(f => this.furnitureWare(f)).join("")}</div>`).join("");
+        // A drop-down picks which kind is shown (or all of them).
+        const pick = this.furnGroup || "all", shown = pick === "all" ? groups : groups.filter(([name]) => name === pick);
+        return `<div class="row furn-pick"><span class="desc">종류</span><select id="furnGroup" aria-label="가구 종류">
+            <option value="all"${pick === "all" ? " selected" : ""}>전체</option>${groups.map(([name]) => `<option value="${name}"${name === pick ? " selected" : ""}>${name}</option>`).join("")}</select></div>
+          <div class="desc">구매한 가구는 보관함에 들어갑니다. 보관함에 있는 가구는 산 값 그대로 환불할 수 있습니다.</div>`
+          + shown.map(([name, items]) => `${pick === "all" ? `<div class="section-label">${name}</div>` : ""}<div class="wares">${items.map(f => this.furnitureWare(f)).join("")}</div>`).join("");
       }
       case "theme": {
         const list = (kind, items, label) => `<div class="section-label">${label}</div><div class="wares">${items.map(t => {
@@ -293,7 +305,7 @@ const ui = {
     return `<div class="ware" data-tip="${f.name}${note}">
       <div class="pic"><img src="${furnitureIcon(f.id)}" alt=""></div><div class="name">${f.name}</div>
       ${priceHtml(f.price)}<div class="sub">${stored || placed ? `보관 ${stored} · 배치 ${placed}` : "&nbsp;"}</div>
-      ${buyBtn("구매", "buyFurniture", f.id, f.price)}</div>`;
+      <div class="ware-btns">${buyBtn("구매", "buyFurniture", f.id, f.price)}${game.refundable(f.id) ? `<button class="btn small${this.refundAsk === f.id ? " danger" : ""}" data-act="refund" data-id="${f.id}" data-tip="보관함의 ${f.name} 하나를 ${fmt(f.price)}에 되돌려 받습니다">${this.refundAsk === f.id ? "정말 환불" : "환불"}</button>` : ""}</div></div>`;
   },
   // ---------- pets: their own panel ----------
 
@@ -384,7 +396,7 @@ const ui = {
     const owned = Object.entries(s.owned).filter(([, n]) => n > 0);
     const stored = `<div class="section-label">보관함</div>` + (owned.length ? `<div class="grid4">${owned.map(([id, n]) =>
       small(furnitureIcon(id), game.piece(id).name, `data-act="takeOut" data-id="${id}"`, d && d.held && d.held.id === id && !d.held.from, n > 1 ? `<span class="count">${n}</span>` : "")).join("")}</div>
-      <div class="desc">보관함의 가구를 누른 뒤, 방에서 놓을 칸을 누르세요.</div>` : `<div class="desc">비어 있습니다. 상점에서 산 가구가 여기에 들어옵니다.</div>`);
+      <div class="desc">보관함의 가구를 누른 뒤, 방에서 놓을 칸을 누르세요. 필요 없는 가구는 상점에서 환불할 수 있습니다.</div>` : `<div class="desc">비어 있습니다. 상점에서 산 가구가 여기에 들어옵니다.</div>`);
     if (!sel) return placed + stored + `<div class="desc">방이나 위의 목록에서 가구를 누르면 회전과 색을 바꿀 수 있습니다.</div>`;
     const f = game.piece(sel.id);
     return placed + stored + `<div class="section-label" id="selSection">선택한 가구 · ${f.name}</div>
@@ -510,7 +522,7 @@ const ui = {
       </div>
       ${PHONE ? "" : `<div class="card"><div class="title">창</div>
         <div class="row"><span class="desc">항상 위에 표시</span><span class="grow"></span>${seg("onTop", st.onTop, [[true, "켜기"], [false, "끄기"]])}</div>
-        <div class="row"><span class="desc">크기</span><span class="grow"></span>${seg("zoom", st.zoom, [[2, "작게"], [3, "크게"]])}</div>
+        <div class="row"><span class="desc">크기</span><span class="grow"></span>${seg("zoom", st.zoom, [[2, "작게"], [3, "크게"], [4, "더 크게"], [6, "아주 크게"]])}</div>
         <div class="row"><span class="desc">위쪽 바를 끌어 옮길 수 있습니다.</span><span class="grow"></span><button class="btn small" data-act="dock">오른쪽 아래로</button></div>
       </div>`}
       <div class="card"><div class="title">키 입력 감지 방식</div>
@@ -656,7 +668,7 @@ const ui = {
       case "setting": {
         const [key, v] = id.split(":"), st = s.settings;
         if (key === "onTop") { st.onTop = v === "true"; host.setOnTop(st.onTop); this.updateBar(); }
-        if (key === "zoom") { st.zoom = +v; room.setZoom(st.zoom); this.layout(); }
+        if (key === "zoom") { st.zoom = +v; this.layout(); }
         if (key === "typing") { st.typing = v; host.setGlobalTyping(v === "global"); }
         this.render();
         break;
@@ -680,11 +692,11 @@ const ui = {
       case "moveSel": this.moveSelected(); this.render(); break;
       case "storeSel": this.storeHeld(); break;
       case "buyRoom": if (game.buyRoom(id)) { this.toast(`${game.roomName(s.rooms.length - 1)}을(를) 지었습니다. ◀ ▶로 가 볼 수 있습니다.`, 4000); this.renderRoomBar(); } break;
-      case "furnJump": {
-        const body = $("#panelBody"), label = $(`#fg${id}`), bar = body.querySelector(".furn-jump");
-        if (label) body.scrollTop = label.offsetTop - body.offsetTop - bar.offsetHeight - 4;
+      case "refund":
+        if (this.refundAsk !== id) { this.refundAsk = id; this.render(); break; }
+        this.refundAsk = null;
+        { const back = game.refund(id); if (back) this.toast(`${game.piece(id).name}을(를) 환불했습니다. (+${fmt(back)})`); else this.render(); }
         break;
-      }
       case "roomRename": this.editRoomName(+id); break;
       case "roomRenameSave": {
         const el = $("#roomRename");

@@ -15,6 +15,9 @@ function newRoom(kind, placed = []) {
   return { kind, placed, wall: k.wall, floor: k.floor, wallColor: k.wallColor || 0, floorColor: k.floorColor || 0 };
 }
 
+// What every home starts with (never refunded: they came free).
+const STARTER_PIECES = { desk: 1, chair: 1, bed: 1, rug: 1, plant: 1, window: 1 };
+
 function newState() {
   return {
     v: 1,
@@ -24,7 +27,7 @@ function newState() {
     totalKeys: 0,
     days: {},            // "YYYY-MM-DD" -> key presses that day
     owned: {},           // furniture bought but not in any room: id -> count
-    bought: { desk: 1, chair: 1, bed: 1, rug: 1, plant: 1, window: 1 },   // every piece ever had (starters + bought): id -> count
+    bought: { ...STARTER_PIECES },   // every piece had (starters + bought, less refunded): id -> count
     // Rooms, each with its pieces. Floor pieces: top-left cell (c, r); wall pieces: r = -1. A piece
     // may also have `color` (an index into COLORS; none = its original greys), `a` (turned this
     // many degrees, in tens) and `food` (meals left in a bowl).
@@ -213,6 +216,21 @@ const game = {
     this.state.bought[id] = (this.state.bought[id] || 0) + 1;
     this.emit("change");
     return true;
+  },
+  // How many of a piece can go back to the shop: those in storage, but never the free starters.
+  refundable(id) {
+    const s = this.state;
+    return Math.max(0, Math.min(s.owned[id] || 0, (s.bought[id] || 0) - (STARTER_PIECES[id] || 0)));
+  },
+  // One from storage back to the shop, for what it cost. Returns the money back (0: couldn't).
+  refund(id) {
+    const s = this.state, f = FURNITURE.find(x => x.id === id);
+    if (!f || this.refundable(id) <= 0) return 0;
+    if (!--s.owned[id]) delete s.owned[id];
+    s.bought[id]--;
+    s.points += f.price;
+    this.emit("change");
+    return f.price;
   },
   // Walls and floors: bought once, then used in any room.
   hasTheme(kind, id) { return this.state.themes.includes(`${kind}:${id}`); },

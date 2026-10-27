@@ -681,7 +681,7 @@ const room = {
       const at = m.at && !m.path ? m.at : null, f = this.foot(m.x, m.y);
       if (at && !at.a && (at.id === "hideout" || at.id === "doghouse")) return;     // inside: drawn with the piece
       if (at && !at.a && at.id === "cattower") return items.push({ d: FY + at.r * T + T - 0.5, draw: () => this.drawPet(g, pet, m, { x: f.x, y: f.y - 16 }) });
-      if (at && at.id === "scratcher" && pet.kind === "cat") return items.push({ d: f.y + 0.2, draw: () => this.drawPet(g, pet, m, { x: f.x + (m.dir === "left" ? -6 : 6), y: f.y }, false, true) });
+      if (at && at.id === "scratcher" && pet.kind === "cat") return items.push({ d: depthOf(at) + 0.1, draw: () => this.drawPet(g, pet, m, { x: f.x + (m.dir === "left" ? -9 : 9), y: f.y }, false, true) });
       if (at && !at.a && at.id === "catwheel") return items.push({ d: FY + at.r * T + T - 0.5, draw: () => this.drawPet(g, pet, { ...m, dir: "right" }, { x: MX + at.c * T + T, y: f.y - 4 }, true) });
       items.push({ d: f.y + 0.2, draw: () => this.drawPet(g, pet, m, f) });
     });
