@@ -842,10 +842,12 @@ const ui = {
       game.store(d.held.id);
       d.held = null;
     } else if (d.selected) {
-      if (!game.room().placed.includes(d.selected) || game.piece(d.selected.id).fixed) return;
-      game.lift(d.selected);
-      game.store(d.selected.id);
+      // Hold on to it first: lifting it redraws the bar, which lets go of the selection.
+      const p = d.selected;
+      if (!game.room().placed.includes(p) || game.piece(p.id).fixed) return;
       d.selected = null;
+      game.lift(p);
+      game.store(p.id);
     }
     this.afterSelect();
   },

@@ -80,6 +80,13 @@ const game = {
     s.look = { hat: 0, glasses: 0, neck: 0, hand: 0, ...s.look };
     s.pets.forEach(p => { p.full ??= 80; p.giftIn ??= PET_CARE.giftEverySec; });
     if (!s.rooms[s.cur]) s.cur = 0;
+    // Up to 0.5.9, putting a selected piece away could lose it. Starter pieces found nowhere in the
+    // home are given back to storage, once.
+    if (!s.recoveredStarters) {
+      const have = id => s.rooms.some(r => r.placed.some(p => p.id === id)) || s.owned[id] > 0;
+      for (const id of ["chair", "bed", "rug", "plant", "window"]) if (!have(id)) s.owned[id] = 1;
+      s.recoveredStarters = true;
+    }
     this.state = s;
   },
   // A made-up, well-furnished home for checking the art; never saved.
