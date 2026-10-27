@@ -366,9 +366,11 @@ const pets = {
   moves: [],
   move(i) {
     if (!this.moves[i]) {
-      // A new pet starts on a free cell of the character's room (or by the door).
-      const rm = game.state.rooms[actor.at] || game.state.rooms[0], free = freeCells(rm), [x, y] = free.length ? pickOne(free) : DOOR;
-      this.moves[i] = { room: actor.at, x, y, path: null, dir: "right", until: 0, task: null, at: null, eating: 0 };
+      // A pet starts on a free cell of the room it was last in, or (new) of the room on screen.
+      const pet = game.state.pets[i], at = game.state.rooms[pet.room] ? pet.room : game.state.cur;
+      const free = freeCells(game.state.rooms[at]), [x, y] = free.length ? pickOne(free) : DOOR;
+      pet.room = at;
+      this.moves[i] = { pet, room: at, x, y, path: null, dir: "right", until: 0, task: null, at: null, eating: 0 };
     }
     return this.moves[i];
   },
@@ -380,8 +382,8 @@ const pets = {
       Object.assign(m, { task: "chase", goal: toy, at: null, path: null, kicks: 0, maxKicks: 2 + Math.floor(Math.random() * 4), repathAt: 0, until: performance.now() + 20000 });
     });
   },
-  // After the character goes to another room, the pets come along a little later.
-  follow() { this.moves.forEach(m => { if (!m.eating) m.followIn = rand(1.5, 4); }); },
+  // After the character goes to another room, some of the pets come along a little later.
+  follow() { this.moves.forEach(m => { if (!m.eating && Math.random() < 0.4) m.followIn = rand(1.5, 4); }); },
   // The pieces in a room a pet of this kind can use, as [piece, cell to go to]. A scratching post
   // is used from the cell beside it (left if free, else right).
   spots(kind, use, rm) {
@@ -395,6 +397,7 @@ const pets = {
   },
   enter(m, to) {
     Object.assign(m, { room: to, x: DOOR[0], y: DOOR[1], path: null, task: null, at: null, goal: null, leaving: null, until: 0 });
+    if (m.pet) m.pet.room = to;   // remembered in the save
   },
   update(dt, now) {
     game.state.pets.forEach((pet, i) => {
@@ -445,12 +448,20 @@ const pets = {
       let wantRoom = m.room;
       if (hungry && !hasFood(rm)) { const k = rooms.findIndex(hasFood); if (k >= 0) wantRoom = k; }
       else if (m.followIn !== undefined && (m.followIn -= dt) <= 0) { delete m.followIn; wantRoom = actor.at; }
+      else if (m.wanderTo !== undefined) { if (rooms[m.wanderTo]) wantRoom = m.wanderTo; delete m.wanderTo; }
       if (wantRoom !== m.room && m.leaving !== wantRoom) {
         if (m.room !== game.state.cur) this.enter(m, wantRoom);
         else { const path = findPath(m, [DOOR], rm); if (path) { m.path = path.slice(1); m.leaving = wantRoom; m.task = null; } else this.enter(m, wantRoom); }
       }
       if (!m.path && now > m.until && m.leaving == null && m.task !== "chase") {
         m.at = null; m.task = null;
+        // Now and then, off to see another room.
+        if (rooms.length > 1 && !hungry && !isNight() && Math.random() < 0.15) {
+          let k = Math.floor(Math.random() * (rooms.length - 1));
+          if (k >= m.room) k++;
+          m.wanderTo = k; m.until = now + 1000;
+          return;
+        }
         const roll = Math.random(), food = hungry && this.spots(pet.kind, "food", rm).filter(([p]) => p.food > 0);
         let pick = null;
         if (food && food.length) pick = { list: food, task: "eat" };
