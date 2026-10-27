@@ -258,7 +258,7 @@ function seats(rm) {
     return desk && spot[0] === desk[0] && spot[1] === desk[1] ? [] : [{ spot, dir: f.sit[2] }];
   });
 }
-const REST_AFTER_MS = 20000;   // with no typing for this long, the character goes to bed for a rest
+const REST_AFTER_MS = 5000;   // with no typing for this long, the character goes to bed for a rest
 const roomWith = id => game.state.rooms.findIndex(r => r.placed.some(p => p.id === id));
 
 const actor = {
@@ -357,7 +357,7 @@ const pets = {
   chase(toy, rmIndex) {
     game.state.pets.forEach((pet, i) => {
       const m = this.move(i);
-      if (m.room !== rmIndex || m.eating > 0 || m.leaving != null) return;
+      if (pet.hidden || m.room !== rmIndex || m.eating > 0 || m.leaving != null) return;
       Object.assign(m, { task: "chase", goal: toy, at: null, path: null, kicks: 0, maxKicks: 2 + Math.floor(Math.random() * 4), repathAt: 0, until: performance.now() + 20000 });
     });
   },
@@ -378,6 +378,7 @@ const pets = {
   },
   update(dt, now) {
     game.state.pets.forEach((pet, i) => {
+      if (pet.hidden) return;
       const m = this.move(i), rooms = game.state.rooms;
       if (!rooms[m.room]) this.enter(m, 0);
       const rm = rooms[m.room];
@@ -572,7 +573,7 @@ const room = {
   creatureAt(e) {
     const { x, y } = this.point(e), cur = game.state.cur;
     const near = (cx, cy, w, h) => { const f = this.foot(cx, cy); return x > f.x - w / 2 && x < f.x + w / 2 && y > f.y - h && y < f.y + 2; };
-    const i = pets.moves.findIndex((m, k) => game.state.pets[k] && m.room === cur && near(m.x, m.y, 14, 12));
+    const i = pets.moves.findIndex((m, k) => game.state.pets[k] && !game.state.pets[k].hidden && m.room === cur && near(m.x, m.y, 14, 12));
     if (i >= 0) return { pet: i };
     if (actor.at === cur && near(actor.x, actor.y, 16, 28)) return { me: true };
     return null;
@@ -613,7 +614,7 @@ const room = {
       const toy = this.toys.get(p);
       const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, rm) : 0) + (toy ? toy.ox : 0), y = FY + p.r * T + (toy ? toy.oy : 0);
       const turned = toy ? (((p.a || 0) + Math.round(toy.spin / 10) * 10) % 360 + 360) % 360 : p.a;
-      const busy = p.id !== "catwheel" || s.pets.some((pet, i) => pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
+      const busy = p.id !== "catwheel" || s.pets.some((pet, i) => !pet.hidden && pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
       items.push({ d: f.walk ? -1 : y + h * T - 1, draw: () => {
         drawPiece(g, p.id, x, y, busy ? t : 0, night, p.color, turned);
         if (p.a) return;
@@ -631,7 +632,7 @@ const room = {
     }
     s.pets.forEach((pet, i) => {
       const m = pets.moves[i];
-      if (!m || m.room !== cur) return;
+      if (!m || m.room !== cur || pet.hidden) return;
       const at = m.at && !m.path ? m.at : null, f = this.foot(m.x, m.y);
       if (at && !at.a && (at.id === "hideout" || at.id === "doghouse")) return;     // inside: drawn with the piece
       if (at && !at.a && at.id === "cattower") return items.push({ d: FY + at.r * T + T - 0.5, draw: () => this.drawPet(g, pet, m, { x: f.x, y: f.y - 16 }) });
@@ -680,7 +681,7 @@ const room = {
   },
   // A pet tucked inside a hideout or dog house: just its eyes in the dark doorway.
   drawPeek(g, p, x, y) {
-    const inside = game.state.pets.some((pet, i) => pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
+    const inside = game.state.pets.some((pet, i) => !pet.hidden && pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
     if (!inside || Math.floor(this.time * 0.7) % 5 === 0) return;      // a blink now and then
     const ex = p.id === "doghouse" ? x + 13 : x + 6, ey = p.id === "doghouse" ? y + 6 : y + 7;
     g.fillStyle = "#f6f2ea"; g.fillRect(ex, ey, 1, 1); g.fillRect(ex + 3, ey, 1, 1);
@@ -726,3 +727,6 @@ const room = {
 // Chance per frame for something that should happen about `perSec` times a second.
 let lastDt = 1 / 60;
 const dtChance = perSec => perSec * lastDt;
+
+// A pet gone to the hotel: its place in the list (and its movements) go with it.
+game.on("petGone", i => pets.moves.splice(i, 1));

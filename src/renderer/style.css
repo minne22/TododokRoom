@@ -175,6 +175,11 @@ body.decorating #room { cursor: pointer; touch-action: none; }   /* dragging pie
   background: var(--bar); color: var(--text); border: 2px solid var(--ink); }
 
 /* pets: how full they are */
+/* pets in 돌보기: each with its buttons underneath */
+.pet-row { display: flex; flex-direction: column; gap: 2px; padding: 3px 0; border-bottom: 1px solid var(--track); }
+.pet-row.hidden-pet > .row:first-child { opacity: .5; }
+.pet-acts { justify-content: flex-end; gap: 3px; }
+.pet-acts input { flex: 1; min-width: 0; font: inherit; border: 2px solid var(--ink); padding: 1px 4px; background: var(--btn); color: var(--text); }
 .progress { flex: none; width: 70px; height: 8px; background: var(--track); border: 1px solid var(--ink); }
 .progress .fill { height: 100%; background: var(--good); }
 .progress .fill.low { background: var(--short); }

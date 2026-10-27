@@ -38,7 +38,7 @@ function newState() {
     cur: 0,              // the room on screen
     themes: ["wall:plain", "floor:tile"],
     unlocked: [],        // bought clothes/hair/accessories, as "key:index"
-    pets: [],            // { kind: "cat" | "dog", color, name, full (0–100), giftIn (seconds), acc (worn accessory) }
+    pets: [],            // { kind: "cat" | "dog", color, name, full (0–100), giftIn (seconds), acc (worn accessory), hidden }
     petAcc: [],          // accessories bought for pets
     food: 3,             // bags of pet food
     settings: {
@@ -152,6 +152,7 @@ const game = {
     if (whole > 0) { this.idle -= whole; s.points += whole * EARN.perSec; }
     // Pets get hungry; fed ones now and then bring a little 토독.
     s.pets.forEach((p, i) => {
+      if (p.hidden) return;   // put away for now: neither hungry nor bringing gifts
       p.full = Math.max(0, p.full - PET_CARE.hungerPerSec * dt);
       if (p.full < PET_CARE.starvingBelow) return;
       p.giftIn -= dt;
@@ -213,6 +214,28 @@ const game = {
     this.state.petAcc.push(id);
     this.emit("change");
     return true;
+  },
+  renamePet(i, name) {
+    const pet = this.state.pets[i];
+    if (!pet || !name.trim()) return false;
+    pet.name = name.trim().slice(0, 8);
+    this.emit("change");
+    return true;
+  },
+  // Hidden pets stay in the list (and keep their things) but aren't in the room.
+  togglePetHidden(i) {
+    const pet = this.state.pets[i];
+    if (!pet) return;
+    if (pet.hidden) delete pet.hidden; else pet.hidden = true;
+    this.emit("change");
+  },
+  // Off to the hotel: the pet leaves for good.
+  sendToHotel(i) {
+    if (!this.state.pets[i]) return null;
+    const [pet] = this.state.pets.splice(i, 1);
+    this.emit("petGone", i);
+    this.emit("change");
+    return pet;
   },
   // Put an accessory on a pet (the same one again takes it off).
   dressPet(i, id) {

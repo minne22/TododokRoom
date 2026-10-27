@@ -69,6 +69,10 @@ const ui = {
     $("#panelExtra").addEventListener("click", e => this.onAction(e));
     $("#panelFoot").addEventListener("click", e => this.onAction(e));
     $("#panelBody").addEventListener("click", e => this.onAction(e));
+    $("#panelBody").addEventListener("keydown", e => {
+      if (e.key === "Enter" && e.target.id === "petRename") $("#panelBody [data-act=petRenameSave]").click();
+      if (e.key === "Escape" && e.target.id === "petRename") { e.stopPropagation(); this.petEdit = null; this.render(); }
+    });
     $("#panelBody").addEventListener("input", e => {
       if (e.target.id === "lookName") this.draft.name = e.target.value;
       if (e.target.id === "petName") {
@@ -101,7 +105,12 @@ const ui = {
     $("#roomBar").addEventListener("click", e => { const b = e.target.closest("[data-room]"); if (b) this.showRoom(game.state.cur + +b.dataset.room); });
     $("#whereMe").onclick = () => this.showRoom(actor.at);
     game.on("room", () => { this.renderRoomBar(); if (this.panel) this.render(); if (room.deco) this.renderStorage(); });
-    game.on("change", () => { this.updateFoot(); if (this.panel && this.panel !== "closet") this.render(); if (room.deco) this.renderStorage(); });
+    game.on("change", () => {
+      this.updateFoot();
+      const typingHere = document.activeElement && document.activeElement.matches("#panelBody input");   // don't wipe a half-typed name
+      if (this.panel && this.panel !== "closet" && !typingHere) this.render();
+      if (room.deco) this.renderStorage();
+    });
     if (PHONE) {
       $("#pad").hidden = false;
       host.onBack(() => this.back());
@@ -296,11 +305,19 @@ const ui = {
   petCareHtml(pic) {
     const s = game.state;
     const bowls = game.allPlaced().filter(p => p.id === "bowl"), emptyBowls = bowls.filter(p => !(p.food >= PET_CARE.servings)).length;
-    const family = s.pets.length ? `<div class="card"><div class="title">우리 아이들</div>${s.pets.map(p => {
-      const full = Math.round(p.full), mood = full < PET_CARE.starvingBelow ? "배고파요" : full < PET_CARE.hungryBelow ? "출출해요" : "배불러요";
-      return `<div class="row"><img src="${pic(p.kind, p.color)}" style="width:22px" alt=""><b>${p.name}</b><span class="desc">${mood}</span><span class="grow"></span>
-        <div class="progress" data-tip="배부름 ${full}%"><div class="fill${full < PET_CARE.starvingBelow ? " low" : ""}" style="width:${full}%"></div></div></div>`;
-    }).join("")}</div>` : `<div class="desc">아직 함께 사는 아이가 없습니다. 입양 탭에서 데려올 수 있습니다.</div>`;
+    const edit = this.petEdit || {};
+    const family = s.pets.length ? `<div class="card"><div class="title">우리 아이들</div>${s.pets.map((p, i) => {
+      const full = Math.round(p.full), mood = p.hidden ? "숨어 있어요" : full < PET_CARE.starvingBelow ? "배고파요" : full < PET_CARE.hungryBelow ? "출출해요" : "배불러요";
+      const acts = edit.i === i && edit.mode === "rename"
+        ? `<input id="petRename" maxlength="8" value="${p.name.replace(/"/g, "&quot;")}" aria-label="새 이름"><button class="btn small on" data-act="petRenameSave" data-id="${i}">저장</button><button class="btn small" data-act="petEditCancel">취소</button>`
+        : edit.i === i && edit.mode === "hotel"
+        ? `<span class="desc grow">${p.name}을(를) 호텔에 보낼까요? 다시 데려올 수 없습니다.</span><button class="btn small danger" data-act="petHotelYes" data-id="${i}">보내기</button><button class="btn small" data-act="petEditCancel">취소</button>`
+        : `<button class="btn small" data-act="petRename" data-id="${i}">이름 바꾸기</button><button class="btn small" data-act="petHide" data-id="${i}">${p.hidden ? "방에 보이기" : "숨기기"}</button><button class="btn small" data-act="petHotel" data-id="${i}">호텔 보내기</button>`;
+      return `<div class="pet-row${p.hidden ? " hidden-pet" : ""}"><div class="row"><img src="${pic(p.kind, p.color)}" style="width:22px" alt=""><b>${p.name}</b><span class="desc">${mood}</span><span class="grow"></span>
+        <div class="progress" data-tip="배부름 ${full}%"><div class="fill${full < PET_CARE.starvingBelow ? " low" : ""}" style="width:${full}%"></div></div></div>
+        <div class="row pet-acts">${acts}</div></div>`;
+    }).join("")}
+      <div class="desc">숨긴 아이는 방에서만 보이지 않고, 숨어 있는 동안에는 배도 고프지 않습니다.</div></div>` : `<div class="desc">아직 함께 사는 아이가 없습니다. 입양 탭에서 데려올 수 있습니다.</div>`;
     const food = `<div class="card"><div class="row"><b>사료</b><span class="desc">${fmt(s.food)}봉</span><span class="grow"></span>
         ${buyBtn(`${PET_CARE.bag.count}봉 사기`, "buyFood", "", PET_CARE.bag.price)}
         <button class="btn small" data-act="fillBowls"${emptyBowls && s.food ? "" : " disabled"}>밥그릇 채우기</button></div>
@@ -576,6 +593,23 @@ const ui = {
         this.toast(`${LOOK_OPTIONS[key][+i]}을(를) 입었습니다.`);
         break;
       }
+      case "petRename": this.petEdit = { i: +id, mode: "rename" }; this.render(); setTimeout(() => { const el = $("#petRename"); if (el) { el.focus(); el.select(); } }); break;
+      case "petRenameSave": {
+        const el = $("#petRename");
+        if (el && game.renamePet(+id, el.value)) { this.petEdit = null; this.render(); }
+        else this.toast("이름을 입력해 주세요.");
+        break;
+      }
+      case "petHide": game.togglePetHidden(+id); break;
+      case "petHotel": this.petEdit = { i: +id, mode: "hotel" }; this.render(); break;
+      case "petHotelYes": {
+        this.petEdit = null;
+        const pet = game.sendToHotel(+id);
+        if (pet) this.toast(`${pet.name}은(는) 호텔로 떠났습니다.`);
+        if ((this.dressPet || 0) >= s.pets.length) this.dressPet = 0;
+        break;
+      }
+      case "petEditCancel": this.petEdit = null; this.render(); break;
       case "dressWho": this.dressPet = +id; this.render(); break;
       case "buyPetAcc": if (game.buyPetAcc(id)) game.dressPet(Math.min(this.dressPet || 0, s.pets.length - 1), id); break;
       case "dress": game.dressPet(Math.min(this.dressPet || 0, s.pets.length - 1), id); break;
