@@ -25,7 +25,7 @@ const FURNITURE = [
   { id: "lamp",      name: "스탠드",      price: 600,  size: [1, 1] },
   { id: "plant",     name: "화분",        price: 600,  size: [1, 1] },
   { id: "table",     name: "동그란 탁자",  price: 1050,  size: [1, 1] },
-  { id: "bed",       name: "침대",        price: 1800,  size: [1, 2], flat: true },
+  { id: "bed",       name: "침대",        price: 1800,  size: [1, 2], flat: true, bed: true },
   { id: "frame",     name: "액자",        price: 1200,  size: [1, 1], wall: true },
   { id: "clock",     name: "벽시계",      price: 1200,  size: [1, 1], wall: true },
   { id: "window",    name: "창문",        price: 1500,  size: [1, 1], wall: true },
@@ -48,6 +48,37 @@ const FURNITURE = [
   { id: "gardentree", name: "정원수",     price: 1500, size: [1, 1] },
   { id: "outbench",  name: "벤치",        price: 1800, size: [2, 1], sit: [0, 0, "down"] },
   { id: "flowerbed", name: "꽃밭",        price: 900,  size: [2, 1], walk: true, flat: true },
+  // More of everything.
+  { id: "tv",          name: "TV",          price: 6000, size: [2, 1] },
+  { id: "bigrug",      name: "큰 러그",     price: 2400, size: [3, 2], walk: true, flat: true },
+  { id: "armchair",    name: "안락의자",    price: 3600, size: [1, 1], sit: [0, 0, "down"] },
+  { id: "bigtable",    name: "큰 테이블",   price: 4500, size: [2, 2] },
+  { id: "floorlamp",   name: "장스탠드",    price: 1500, size: [1, 1] },
+  { id: "bigplant",    name: "큰 화분",     price: 1800, size: [1, 1] },
+  { id: "doublebed",   name: "더블 침대",   price: 6000, size: [2, 2], flat: true, bed: true },
+  { id: "wardrobe",    name: "옷장",        price: 4800, size: [2, 1] },
+  { id: "dresser",     name: "서랍장",      price: 2400, size: [1, 1] },
+  { id: "vanity",      name: "화장대",      price: 3600, size: [1, 1] },
+  { id: "nightstand",  name: "협탁",        price: 1200, size: [1, 1] },
+  { id: "mirror",      name: "전신 거울",   price: 2100, size: [1, 1] },
+  { id: "diningtable", name: "식탁",        price: 3600, size: [2, 1] },
+  { id: "counter",     name: "조리대",      price: 1800, size: [1, 1] },
+  { id: "bathtub",     name: "욕조",        price: 6000, size: [2, 1] },
+  { id: "toilet",      name: "변기",        price: 2400, size: [1, 1] },
+  { id: "washbasin",   name: "세면대",      price: 1800, size: [1, 1] },
+  { id: "washer",      name: "세탁기",      price: 4500, size: [1, 1] },
+  { id: "guitar",      name: "기타",        price: 3000, size: [1, 1] },
+  { id: "fan",         name: "선풍기",      price: 1200, size: [1, 1] },
+  { id: "trashcan",    name: "휴지통",      price: 300,  size: [1, 1] },
+  { id: "hanger",      name: "옷걸이",      price: 900,  size: [1, 1] },
+  { id: "poster",      name: "포스터",      price: 600,  size: [1, 1], wall: true },
+  { id: "calendar",    name: "달력",        price: 450,  size: [1, 1], wall: true },
+  { id: "curtain",     name: "커튼 창문",   price: 2100, size: [1, 1], wall: true },
+  { id: "aircon",      name: "에어컨",      price: 3000, size: [1, 1], wall: true },
+  { id: "swing",       name: "그네",        price: 4500, size: [2, 1] },
+  { id: "parasol",     name: "파라솔 테이블", price: 3000, size: [1, 1] },
+  { id: "mailbox",     name: "우체통",      price: 1200, size: [1, 1] },
+  { id: "pond",        name: "연못",        price: 5400, size: [2, 1], flat: true },
   // For pets.
   { id: "bowl",      name: "밥그릇",      price: 300,  size: [1, 1], walk: true, pet: "food", flat: true },
   { id: "feeder",    name: "자동 급식기", price: 1500, size: [1, 1], pet: "food", auto: true },
@@ -58,6 +89,17 @@ const FURNITURE = [
   { id: "hideout",   name: "숨숨집",      price: 1200, size: [1, 1], pet: "rest" },
   { id: "catwheel",  name: "캣휠",        price: 3000, size: [2, 1], pet: "play", only: "cat" },
   { id: "doghouse",  name: "개집",        price: 2400, size: [2, 1], pet: "rest", only: "dog" },
+];
+
+// How the shop sorts the furniture (pet things have their own panel; anything left out goes last).
+const FURN_GROUPS = [
+  ["거실", ["sofa", "armchair", "table", "bigtable", "tv", "rug", "bigrug", "cushion", "lamp", "floorlamp", "plant", "bigplant", "fishbowl", "speaker", "radio", "piano", "fireplace"]],
+  ["침실", ["bed", "doublebed", "wardrobe", "dresser", "vanity", "nightstand", "mirror", "hanger"]],
+  ["주방", ["diningtable", "chair", "counter", "sink", "stove", "fridge", "coffee"]],
+  ["욕실", ["bathtub", "toilet", "washbasin", "washer"]],
+  ["취미·생활", ["bookshelf", "easel", "guitar", "fan", "trashcan"]],
+  ["벽에 거는 가구", ["window", "curtain", "frame", "poster", "calendar", "clock", "shelf", "lights", "aircon"]],
+  ["마당", ["gardentree", "flowerbed", "outbench", "swing", "parasol", "mailbox", "pond"]],
 ];
 
 // Walls and floors, all in greys: how each is drawn lives in room.js.
@@ -80,14 +122,18 @@ const FLOORS = [
   { id: "grass",   name: "잔디",       price: 1500 },
 ];
 
-// More rooms to buy, each starting with its own wall and floor (those come free with the room).
+// Rooms to build, each starting with its own wall and floor (those come free with the room). Any
+// kind can be built again and again; each room built makes the next one dearer (ROOM_PRICE_STEP).
 // The first room, 방, has the desk.
+const ROOM_PRICE_STEP = 1000;
 const ROOM_KINDS = [
-  { id: "room",    name: "방",   price: 0,    wall: "plain", floor: "tile" },
+  { id: "room",    name: "방",   price: 3000, wall: "plain", floor: "tile" },
   { id: "living",  name: "거실", price: 3000, wall: "plain", floor: "plank", floorColor: 11 },
   { id: "bedroom", name: "침실", price: 3000, wall: "dots",  floor: "carpet", wallColor: 10 },
   { id: "kitchen", name: "주방", price: 4000, wall: "check", floor: "checker" },
   { id: "yard",    name: "마당", price: 6000, wall: "fence", floor: "grass", wallColor: 11, floorColor: 4 },
+  { id: "bath",    name: "욕실", price: 4000, wall: "check", floor: "tile", wallColor: 7 },
+  { id: "study",   name: "서재", price: 3000, wall: "wood",  floor: "plank", floorColor: 11 },
 ];
 
 // Clothes, hair and accessories beyond the free basics, bought in the shop.

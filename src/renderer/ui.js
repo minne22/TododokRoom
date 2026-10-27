@@ -38,6 +38,9 @@ function withOption(look, key, i) {
 // ---------------------------------------------------------------------------------------------
 // The UI
 // ---------------------------------------------------------------------------------------------
+// Text someone typed (a room's name), safe inside HTML.
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
 const ui = {
   panel: null,        // "shop" | "pets" | "closet" | "paint" | "record" | "settings" | null
   tab: { shop: "furniture", looks: "top", pets: "adopt" },
@@ -72,6 +75,8 @@ const ui = {
     $("#panelBody").addEventListener("keydown", e => {
       if (e.key === "Enter" && e.target.id === "petRename") $("#panelBody [data-act=petRenameSave]").click();
       if (e.key === "Escape" && e.target.id === "petRename") { e.stopPropagation(); this.petEdit = null; this.render(); }
+      if (e.key === "Enter" && e.target.id === "roomRename") $("#panelBody [data-act=roomRenameSave]").click();
+      if (e.key === "Escape" && e.target.id === "roomRename") { e.stopPropagation(); this.roomEdit = null; this.render(); }
     });
     $("#panelBody").addEventListener("input", e => {
       if (e.target.id === "lookName") this.draft.name = e.target.value;
@@ -104,6 +109,7 @@ const ui = {
     });
     $("#roomBar").addEventListener("click", e => { const b = e.target.closest("[data-room]"); if (b) this.showRoom(game.state.cur + +b.dataset.room); });
     $("#whereMe").onclick = () => this.showRoom(actor.at);
+    $("#roomName").onclick = () => this.editRoomName(game.state.cur);
     game.on("room", () => { this.renderRoomBar(); if (this.panel) this.render(); if (room.deco) this.renderStorage(); });
     game.on("change", () => {
       this.updateFoot();
@@ -232,9 +238,16 @@ const ui = {
   shopHtml() {
     const s = game.state;
     switch (this.tab.shop) {
-      case "furniture":
-        return `<div class="wares">${FURNITURE.filter(f => !f.fixed && !f.pet).map(f => this.furnitureWare(f)).join("")}</div>
-          <div class="desc">구매한 가구는 보관함에 들어갑니다. 아래의 꾸미기 버튼으로 배치할 수 있습니다.</div>`;
+      case "furniture": {
+        const listed = new Set(FURN_GROUPS.flatMap(([, ids]) => ids));
+        const groups = FURN_GROUPS.map(([name, ids]) => [name, ids.map(id => FURNITURE.find(f => f.id === id)).filter(Boolean)]);
+        const rest = FURNITURE.filter(f => !f.fixed && !f.pet && !listed.has(f.id));
+        if (rest.length) groups.push(["그 밖의 가구", rest]);
+        // Buttons along the top jump to each kind.
+        return `<div class="furn-jump">${groups.map(([name], i) => `<button class="btn small" data-act="furnJump" data-id="${i}">${name}</button>`).join("")}</div>
+          <div class="desc">구매한 가구는 보관함에 들어갑니다. 아래의 꾸미기 버튼으로 배치할 수 있습니다.</div>`
+          + groups.map(([name, items], i) => `<div class="section-label" id="fg${i}">${name}</div><div class="wares">${items.map(f => this.furnitureWare(f)).join("")}</div>`).join("");
+      }
       case "theme": {
         const list = (kind, items, label) => `<div class="section-label">${label}</div><div class="wares">${items.map(t => {
           const have = game.hasTheme(kind, t.id), using = game.room()[kind] === t.id;
@@ -246,11 +259,15 @@ const ui = {
       }
       case "room": {
         // Rooms to build: each comes with its own wall and floor; go between them with ◀ ▶ or the door.
-        const built = s.rooms.map((r, i) => `<span class="tag">${game.roomName(i)}</span>`).join(" · ");
-        const wares = game.roomsToBuy().map(k => `<div class="ware"><div class="pic"><img class="swatch" src="${surfaceIcon("floor", k.floor, k.floorColor)}" alt=""></div>
-          <div class="name">${k.name}</div>${priceHtml(k.price)}${buyBtn("짓기", "buyRoom", k.id, k.price)}</div>`).join("");
-        return `<div class="desc">지은 방: ${built}</div>` + (wares ? `<div class="wares">${wares}</div>` : `<div class="desc">모든 방을 지었습니다.</div>`)
-          + `<div class="desc">방 위쪽의 ◀ ▶ 나 아래쪽 가운데의 문을 눌러 방을 오갈 수 있습니다. 캐릭터와 반려동물도 문으로 방을 오갑니다.</div>`;
+        // Each room built: its name, which can be changed.
+        const built = `<div class="card"><div class="title">지은 방 · ${s.rooms.length}개</div>${s.rooms.map((r, i) => `<div class="row room-row">${this.roomEdit === i
+          ? `<input id="roomRename" maxlength="8" value="${esc(game.roomName(i))}" aria-label="방 이름"><button class="btn small on" data-act="roomRenameSave" data-id="${i}">저장</button><button class="btn small" data-act="roomEditCancel">취소</button>`
+          : `<b>${esc(game.roomName(i))}</b>${i === s.cur ? `<span class="tag">보는 중</span>` : ""}<span class="grow"></span><button class="btn small" data-act="roomRename" data-id="${i}">이름 바꾸기</button>`}</div>`).join("")}
+          <div class="desc">이름을 비우고 저장하면 원래 이름으로 돌아갑니다. 방 위쪽의 방 이름을 눌러도 바꿀 수 있습니다.</div></div>`;
+        const wares = ROOM_KINDS.map(k => { const price = game.roomPrice(k.id); return `<div class="ware"><div class="pic"><img class="swatch" src="${surfaceIcon("floor", k.floor, k.floorColor)}" alt=""></div>
+          <div class="name">${k.name}</div>${priceHtml(price)}${buyBtn("짓기", "buyRoom", k.id, price)}</div>`; }).join("");
+        return built + `<div class="section-label">방 짓기</div><div class="wares">${wares}</div>`
+          + `<div class="desc">같은 종류도 몇 개든 지을 수 있고, 방이 늘 때마다 다음 방은 ${fmt(ROOM_PRICE_STEP)}씩 비싸집니다. 방 위쪽의 ◀ ▶ 나 아래쪽 가운데의 문을 눌러 방을 오갈 수 있습니다. 캐릭터와 반려동물도 문으로 방을 오갑니다.</div>`;
       }
       case "looks": {
         const key = this.tab.looks;
@@ -662,7 +679,21 @@ const ui = {
       }
       case "moveSel": this.moveSelected(); this.render(); break;
       case "storeSel": this.storeHeld(); break;
-      case "buyRoom": if (game.buyRoom(id)) { this.toast(`${ROOM_KINDS.find(k => k.id === id).name}을(를) 지었습니다. ◀ ▶로 가 볼 수 있습니다.`, 4000); this.renderRoomBar(); } break;
+      case "buyRoom": if (game.buyRoom(id)) { this.toast(`${game.roomName(s.rooms.length - 1)}을(를) 지었습니다. ◀ ▶로 가 볼 수 있습니다.`, 4000); this.renderRoomBar(); } break;
+      case "furnJump": {
+        const body = $("#panelBody"), label = $(`#fg${id}`), bar = body.querySelector(".furn-jump");
+        if (label) body.scrollTop = label.offsetTop - body.offsetTop - bar.offsetHeight - 4;
+        break;
+      }
+      case "roomRename": this.editRoomName(+id); break;
+      case "roomRenameSave": {
+        const el = $("#roomRename");
+        this.roomEdit = null;
+        if (el) game.renameRoom(+id, el.value);
+        this.render();
+        break;
+      }
+      case "roomEditCancel": this.roomEdit = null; this.render(); break;
       case "paintPiece": {
         const sel = room.deco && room.deco.selected;
         if (!sel || !game.room().placed.includes(sel)) break;
@@ -883,6 +914,13 @@ const ui = {
     if (i === game.state.cur) return;
     if (room.deco) { this.cancelHeld(); room.deco.selected = null; }
     game.showRoom(i);
+  },
+  // Change a room's name, in the shop's 방 tab.
+  editRoomName(i) {
+    this.roomEdit = i;
+    this.tab.shop = "room";
+    if (this.panel === "shop") this.render(); else this.open("shop");
+    setTimeout(() => { const el = $("#roomRename"); if (el) { el.focus(); el.select(); } });
   },
   renderRoomBar() {
     const s = game.state, many = s.rooms.length > 1;

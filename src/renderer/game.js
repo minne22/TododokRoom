@@ -129,12 +129,26 @@ const game = {
   // ---------- rooms ----------
 
   room(i = this.state.cur) { return this.state.rooms[i]; },
-  roomName(i = this.state.cur) { return ROOM_KINDS.find(k => k.id === this.state.rooms[i].kind).name; },
-  // The rooms not built yet, in the order they're offered.
-  roomsToBuy() { return ROOM_KINDS.filter(k => k.price && !this.state.rooms.some(r => r.kind === k.id)); },
+  // A room's own name if it was given one, else its kind's, numbered from the second of a kind on ("거실 2").
+  roomName(i = this.state.cur) {
+    const rooms = this.state.rooms, rm = rooms[i];
+    if (rm.name) return rm.name;
+    const n = rooms.slice(0, i + 1).filter(r => r.kind === rm.kind).length;
+    return ROOM_KINDS.find(k => k.id === rm.kind).name + (n > 1 ? ` ${n}` : "");
+  },
+  renameRoom(i, name) {
+    const rm = this.state.rooms[i];
+    if (!rm) return false;
+    name = String(name || "").trim().slice(0, 8);
+    if (name) rm.name = name; else delete rm.name;   // left empty: back to the kind's name
+    this.emit("room");
+    this.emit("change");
+    return true;
+  },
+  roomPrice(kind) { return ROOM_KINDS.find(k => k.id === kind).price + ROOM_PRICE_STEP * (this.state.rooms.length - 1); },
   buyRoom(kind) {
     const k = ROOM_KINDS.find(x => x.id === kind);
-    if (!k || this.state.rooms.some(r => r.kind === kind) || !this.pay(k.price)) return false;
+    if (!k || !this.pay(this.roomPrice(kind))) return false;
     this.state.rooms.push(newRoom(kind));
     for (const t of [`wall:${k.wall}`, `floor:${k.floor}`]) if (!this.state.themes.includes(t)) this.state.themes.push(t);
     this.emit("change");

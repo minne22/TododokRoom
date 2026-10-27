@@ -198,7 +198,10 @@ body.decorating #room { cursor: pointer; touch-action: none; }   /* dragging pie
 /* rooms: ◀ name ▶ over the top of the room */
 #roomBar { position: absolute; left: 50%; top: 2px; transform: translateX(-50%); display: flex; align-items: center; gap: 2px;
   background: rgba(255, 255, 255, .85); border: 2px solid var(--ink); line-height: 1.4; font-size: 11px; }
-#roomBar b { padding: 0 6px; min-width: 40px; text-align: center; }
+#roomBar b { padding: 0 6px; min-width: 40px; text-align: center; cursor: pointer; }
+.room-row { gap: 3px; padding: 2px 0; }
+.furn-jump { position: sticky; top: -1px; z-index: 1; display: flex; flex-wrap: wrap; gap: 3px; padding: 3px 0; background: var(--bar); }
+.room-row input { flex: 1; min-width: 0; font: inherit; border: 2px solid var(--ink); padding: 1px 4px; background: var(--btn); color: var(--text); }
 .rb { border: 0; background: none; font: inherit; font-size: 9px; padding: 1px 4px; cursor: pointer; color: var(--text); }
 .rb:hover { background: var(--btn-hover); }
 #whereMe { position: absolute; right: 4px; top: 2px; border: 2px solid var(--ink); background: rgba(255, 255, 255, .85); font: inherit; font-size: 10px; line-height: 1.4; padding: 0 4px; cursor: pointer; }

@@ -42,7 +42,7 @@
       if (actor.doing === "stand" && solid) note(`character standing inside ${solid.id}`);
       if (actor.doing === "sit" && !(actor.seat && game.cells(actor.seat).some(([x, y]) => x === ax && y === ay))) note(`character sitting off its seat (${ax},${ay})`);
       if (actor.doing === "type" && solid && solid.id !== "chair") note(`character typing inside ${solid.id}`);
-      if (actor.doing === "sleep" && !(solid && solid.id === "bed")) note(`character sleeping outside the bed (${ax},${ay})`);
+      if (actor.doing === "sleep" && !(solid && game.piece(solid.id).bed)) note(`character sleeping outside the bed (${ax},${ay})`);
     }
     // The pets.
     s.pets.forEach((pet, i) => {

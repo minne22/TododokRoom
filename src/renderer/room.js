@@ -98,7 +98,7 @@ function tintCanvas(c, hex) {
   return c;
 }
 // Pieces whose picture changes over time, and how: the rest are drawn once per colour.
-const ANIMATED = new Set(["desk", "speaker", "fishbowl", "coffee", "lights", "fireplace", "lamp", "catwheel"]);
+const ANIMATED = new Set(["desk", "speaker", "fishbowl", "coffee", "lights", "fireplace", "lamp", "catwheel", "tv", "washer", "fan", "aircon", "pond"]);
 const tintedCache = new Map();
 // How a piece turned `a` degrees is drawn: the picture to use (front, side or back), whether it's
 // mirrored, and how far the picture itself is turned. Flat pieces (seen from above) simply turn;
@@ -250,7 +250,8 @@ function underDesk(c, r, rm) {
   if (r !== d.r + h || c < d.c || c >= d.c + w) return 0;
   return (d.c + (w - 1) / 2 - c) * T;
 }
-function bedSpot(rm) { const b = rm.placed.find(p => p.id === "bed"); return b ? [b.c, b.r] : null; }
+const isBed = p => !!game.piece(p.id).bed;
+function bedSpot(rm) { const b = rm.placed.find(isBed); return b ? [b.c, b.r] : null; }
 // Places to sit, as { spot, dir, piece }. A turned seat faces the way it's turned: drawn from the
 // side its front is to the left (or right), from behind its front is away from us.
 function seats(rm) {
@@ -265,7 +266,7 @@ function seats(rm) {
 // How deep a placed piece is drawn (later = in front).
 const depthOf = p => game.piece(p.id).walk ? -1 : FY + p.r * T + game.size(p.id, p.a)[1] * T - 1;
 const REST_AFTER_MS = 5000;   // with no typing for this long, the character goes to bed for a rest
-const roomWith = id => game.state.rooms.findIndex(r => r.placed.some(p => p.id === id));
+const roomWith = id => game.state.rooms.findIndex(r => r.placed.some(p => id === "bed" ? isBed(p) : p.id === id));
 
 const actor = {
   at: 0,                        // which room
@@ -326,7 +327,13 @@ const actor = {
     pets.follow();
   },
   go(spot, then, dir) {
-    const path = findPath(this, [spot], this.rm());
+    let path = findPath(this, [spot], this.rm());
+    // A big bed's pillow end can be boxed in by the bed itself: climb on from a free side.
+    if (!path && then === "sleep") {
+      const bed = this.rm().placed.find(p => isBed(p) && p.c === spot[0] && p.r === spot[1]);
+      path = bed && findPath(this, game.cells(bed), this.rm());
+      if (path) path.push(spot);
+    }
     if (!path) { this.until = performance.now() + 2000; if (then === "leave") this.enter(this.to); return; }
     this.path = path.slice(1);
     this.then = then; this.thenDir = dir;
@@ -638,7 +645,7 @@ const room = {
       const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, rm) : 0) + (toy ? toy.ox : 0), y = FY + p.r * T + (toy ? toy.oy : 0);
       const turned = toy ? (((p.a || 0) + Math.round(toy.spin / 10) * 10) % 360 + 360) % 360 : p.a;
       const busy = p.id !== "catwheel" || s.pets.some((pet, i) => !pet.hidden && pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
-      const sleeper = p.id === "bed" && here && actor.doing === "sleep" && Math.round(actor.x) === p.c && Math.round(actor.y) === p.r;
+      const sleeper = f.bed && here && actor.doing === "sleep" && Math.round(actor.x) === p.c && Math.round(actor.y) === p.r;
       items.push({ d: f.walk ? -1 : y + h * T - 1, draw: () => {
         if (sleeper) return this.drawBedWithSleeper(g, p, x, y, night);
         drawPiece(g, p.id, x, y, busy ? t : 0, night, p.color, turned);
@@ -648,7 +655,7 @@ const room = {
         if (p.id === "hideout" || p.id === "doghouse") this.drawPeek(g, p, x, y);
       } });
     });
-    if (here && !(actor.doing === "sleep" && rm.placed.some(p => p.id === "bed" && p.c === Math.round(actor.x) && p.r === Math.round(actor.y)))) {
+    if (here && !(actor.doing === "sleep" && rm.placed.some(p => isBed(p) && p.c === Math.round(actor.x) && p.r === Math.round(actor.y)))) {
       const f = this.foot(actor.x, actor.y), cx = Math.round(actor.x), cy = Math.round(actor.y);
       // Sitting: on the seat, so drawn just after it; facing away (a seat or desk chair seen from
       // behind), just before it, so the back hides all but the head and shoulders.
@@ -698,7 +705,7 @@ const room = {
   drawBedWithSleeper(g, p, x, y, night) {
     const c = document.createElement("canvas"), o = c.getContext("2d", { willReadFrequently: true }), bx = 16, by = 40;
     c.width = 64; c.height = 72;
-    drawFurniture(o, "bed", bx, by, 0, night);
+    drawFurniture(o, p.id, bx, by, 0, night);
     const r = (col, a, b, w, h) => { o.fillStyle = col; o.fillRect(a, b, w, h); };
     o.save();
     o.beginPath(); o.rect(bx, by - 6, 16, 16); o.clip();
@@ -707,11 +714,11 @@ const room = {
     r(G5, bx + 1, by + 9, 14, 18); r(G6, bx + 1, by + 9, 14, 2); r(G4, bx + 1, by + 26, 14, 1);
     for (let k = 0; k < 3; k++) r(G4, bx + 1, by + 15 + k * 4, 14, 1);
     if (COLORS[p.color || 0]) tintCanvas(c, COLORS[p.color]);
-    const [w, h] = game.size("bed", p.a), a = p.a || 0;
+    const [w, h] = game.size(p.id, p.a), [w0, h0] = game.piece(p.id).size, a = p.a || 0;
     g.save();
     g.translate(Math.round(x + w * T / 2), Math.round(y + h * T / 2));
     g.rotate(a * Math.PI / 180);
-    g.drawImage(c, -(bx + 8), -(by + 16));   // the bed's own middle (1 x 2 cells) on the footprint's middle
+    g.drawImage(c, -(bx + w0 * T / 2), -(by + h0 * T / 2));   // the bed's own middle on the footprint's middle
     g.restore();
     if (Math.random() < dtChance(isNight() ? 0.6 : 0.2)) this.float(isNight() ? "z" : "~", x + w * T - 4, y - 2);   // asleep, or just resting
   },
