@@ -19,6 +19,8 @@
   설치된 앱들은 그 `latest.yml`을 보고 업데이트한다.
 - 오리 에디션(친구용, 오리 두 종류 입양): `npm run dist:duck` → `dist/duck/TodokRoom-Duck-Setup-<버전>.exe`.
   릴리스로 올리지 않고, 스스로 업데이트하지도 않는다(`src/renderer/edition.js`, `scripts/build-duck.js`).
+- 자가 점검: `npm run check` — 가구를 이리저리 돌려 놓은 방에서 10분을 빠르게 돌려 보고, 캐릭터나 반려동물이 방 밖이나 가구 속에
+  1초 넘게 있으면 알려 준다.
 - 스냅샷 확인: `TODOK_SNAPSHOT=<png>`, `TODOK_DEMO=1`(가구가 갖춰진 가짜 저장), `TODOK_EVAL=<js>`, `TODOK_DELAY=<ms>`
 
 갤럭시(안드로이드) 앱: 같은 렌더러를 Capacitor로 감싼다. 방 아래 메모장에 입력하면 쌓이고, 설정에서 "폰 전체 입력"을 고르고

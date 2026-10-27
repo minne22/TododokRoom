@@ -1,7 +1,7 @@
 {
   "name": "todokroom",
   "productName": "토도독 룸",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "화면 모서리에 띄워 두는 타자 소리 방꾸미기",
   "author": "토도독",
   "main": "src/main.js",
@@ -11,7 +11,8 @@
     "phone": "node scripts/build-phone.js && cap sync android",
     "phone:apk": "npm run phone && cd android && gradlew assembleDebug",
     "dist:duck": "node scripts/build-duck.js",
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "check": "node scripts/check.js"
   },
   "private": true,
   "type": "commonjs",

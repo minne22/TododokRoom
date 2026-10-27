@@ -221,6 +221,8 @@ const freeCells = rm => {
   return out;
 };
 const pickOne = list => list[Math.floor(Math.random() * list.length)];
+// The open cell closest to a position, as the crow flies.
+const nearestFree = (at, rm) => freeCells(rm).sort((a, b) => Math.hypot(a[0] - at.x, a[1] - at.y) - Math.hypot(b[0] - at.x, b[1] - at.y))[0];
 
 // Places to be: the desk seat (for typing), the bed (at night), seats (to rest).
 // The desk seat is on the desk's front side, whichever way it's turned: { spot, dir (to face) }.
@@ -236,7 +238,7 @@ function deskSeat(rm) {
   if (q === 3) for (let k = 0; k < h; k++) options.push([d.c + w, d.r + k]);
   const inside = options.filter(([c, r]) => c >= 0 && r >= 0 && c < ROOM.cols && r < ROOM.rows);
   const chair = inside.find(([c, r]) => rm.placed.some(p => p.id === "chair" && p.c === c && p.r === r));
-  const spot = chair || inside.find(([c, r]) => walkable(c, r, rm)) || inside[0];
+  const spot = chair || inside.find(([c, r]) => walkable(c, r, rm));   // nowhere to sit: no typing at the desk
   return spot ? { spot, dir: ["up", "right", "down", "left"][q] } : null;
 }
 // A chair right in front of the desk is pushed in under its middle, and so is the character
@@ -249,15 +251,19 @@ function underDesk(c, r, rm) {
   return (d.c + (w - 1) / 2 - c) * T;
 }
 function bedSpot(rm) { const b = rm.placed.find(p => p.id === "bed"); return b ? [b.c, b.r] : null; }
+// Places to sit, as { spot, dir, piece }. A turned seat faces the way it's turned: drawn from the
+// side its front is to the left (or right), from behind its front is away from us.
 function seats(rm) {
   const seat = deskSeat(rm), desk = seat && seat.spot;
   return rm.placed.flatMap(p => {
     const f = game.piece(p.id);
     if (!f.sit) return [];
-    const spot = [p.c + f.sit[0], p.r + f.sit[1]];
-    return desk && spot[0] === desk[0] && spot[1] === desk[1] ? [] : [{ spot, dir: f.sit[2] }];
+    const spot = [p.c + f.sit[0], p.r + f.sit[1]], q = f.flat ? 0 : Math.round((p.a || 0) / 90) % 4;
+    return desk && spot[0] === desk[0] && spot[1] === desk[1] ? [] : [{ spot, dir: ["down", "left", "up", "right"][q], piece: p }];
   });
 }
+// How deep a placed piece is drawn (later = in front).
+const depthOf = p => game.piece(p.id).walk ? -1 : FY + p.r * T + game.size(p.id, p.a)[1] * T - 1;
 const REST_AFTER_MS = 5000;   // with no typing for this long, the character goes to bed for a rest
 const roomWith = id => game.state.rooms.findIndex(r => r.placed.some(p => p.id === id));
 
@@ -294,9 +300,15 @@ const actor = {
       // Pottering about: rest on a seat, wander, look in on another room, or just stand a while.
       const spots = seats(this.rm()), roll = Math.random();
       if (rooms.length > 1 && roll < 0.1) this.travel(pickOne(rooms.map((_, i) => i).filter(i => i !== this.at)));
-      else if (spots.length && roll < 0.4) { const s = pickOne(spots); this.go(s.spot, "sit", s.dir); }
+      else if (spots.length && roll < 0.4) { const s = pickOne(spots); this.seat = s.piece; this.go(s.spot, "sit", s.dir); }
       else if (roll < 0.8) { const free = freeCells(this.rm()); if (free.length) this.go(pickOne(free), "stand", "down"); }
       this.until = now + rand(3500, 9000);
+    }
+    // Standing where a piece has just been put down: step off it.
+    if (!this.path && this.doing === "stand" && !walkable(Math.round(this.x), Math.round(this.y), this.rm())) {
+      const out = findPath(this, freeCells(this.rm()), this.rm());
+      if (out && out.length > 1) { this.path = out.slice(1); this.then = "stand"; this.thenDir = "down"; this.doing = "walk"; }
+      else { const near = nearestFree(this, this.rm()); if (near) { this.x = near[0]; this.y = near[1]; } }   // walled in: just hop out
     }
     if (this.path) this.walk(dt);
     this.bob = Math.max(0, this.bob - dt);
@@ -366,7 +378,8 @@ const pets = {
   // The pieces in a room a pet of this kind can use, as [piece, cell to go to]. A scratching post
   // is used from the cell beside it (left if free, else right).
   spots(kind, use, rm) {
-    return rm.placed.filter(p => { const f = game.piece(p.id); return f.pet === use && (!f.only || f.only === kind); })
+    const upright = ["cattower", "catwheel", "hideout", "doghouse"];
+    return rm.placed.filter(p => { const f = game.piece(p.id); return f.pet === use && (!f.only || f.only === kind) && !(p.a && upright.includes(p.id)); })
       .map(p => {
         if (p.id !== "scratcher") return [p, [p.c, p.r]];
         const side = [[p.c - 1, p.r], [p.c + 1, p.r]].find(([c, r]) => walkable(c, r, rm));
@@ -395,10 +408,13 @@ const pets = {
             if (++m.kicks >= m.maxKicks) { m.task = null; m.goal = null; m.heart = 1; m.until = now + rand(3000, 7000); }
           }
         } else if (!m.path || now > m.repathAt) {
-          const goal = [Math.max(0, Math.min(ROOM.cols - 1, Math.round(pos.x))), Math.max(0, Math.min(ROOM.rows - 1, Math.round(pos.y)))];
-          const path = findPath(m, [goal], rm);
+          // Run to the toy's cell, or (if it's gone over or under a piece) the open cells beside it.
+          const tc = [Math.max(0, Math.min(ROOM.cols - 1, Math.round(pos.x))), Math.max(0, Math.min(ROOM.rows - 1, Math.round(pos.y)))];
+          const goals = walkable(...tc, rm) ? [tc] : [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [tc[0] + dx, tc[1] + dy]).filter(([c, r]) => walkable(c, r, rm));
+          const path = goals.length && findPath(m, goals, rm);
           m.path = path && path.length > 1 ? path.slice(1) : null;
-          if (!m.path && Math.hypot(pos.x - m.x, pos.y - m.y) < 1.2) m.path = [[pos.x, pos.y]];   // close enough: pounce
+          // Close enough: pounce, but only onto open floor.
+          if (!m.path && Math.hypot(pos.x - m.x, pos.y - m.y) < 1.2 && walkable(...tc, rm)) m.path = [[pos.x, pos.y]];
           m.repathAt = now + 400;
         }
       }
@@ -471,6 +487,13 @@ const pets = {
         }
       }
       if (m.at && !rm.placed.includes(m.at)) { m.at = null; m.task = null; }   // its spot was moved
+      // Left standing on a piece (done resting in it, a chase over, a piece put down on it): step off
+      // to the nearest open cell rather than sit on top of it.
+      if (!m.path && !m.at && !(m.eating > 0) && !walkable(Math.round(m.x), Math.round(m.y), rm)) {
+        const out = findPath(m, freeCells(rm), rm);
+        if (out && out.length > 1) m.path = out.slice(1);
+        else { const near = nearestFree(m, rm); if (near) { m.x = near[0]; m.y = near[1]; } }   // walled in: just hop out
+      }
       if (m.heart) m.heart = Math.max(0, m.heart - dt);
       if (m.room === game.state.cur && pet.full < PET_CARE.starvingBelow && Math.random() < dtChance(0.08)) { const f = room.foot(m.x, m.y); room.float("배고파", f.x, f.y - 14); }
     });
@@ -528,7 +551,7 @@ const room = {
         st.vx = st.vy = 0;
         // Come to rest: belong to the nearest free cell, then ease onto it.
         const nc = Math.round(toy.c + st.ox / T), nr = Math.round(toy.r + st.oy / T);
-        if ((nc !== toy.c || nr !== toy.r) && game.canPlace(toy.id, nc, nr, toy.a, st.rm, toy)) { st.ox += (toy.c - nc) * T; st.oy += (toy.r - nr) * T; toy.c = nc; toy.r = nr; }
+        if ((nc !== toy.c || nr !== toy.r) && walkable(nc, nr, st.rm) && game.canPlace(toy.id, nc, nr, toy.a, st.rm, toy)) { st.ox += (toy.c - nc) * T; st.oy += (toy.r - nr) * T; toy.c = nc; toy.r = nr; }
         const e = Math.pow(0.02, dt);
         st.ox *= e; st.oy *= e;
         if (Math.abs(st.ox) < 0.3 && Math.abs(st.oy) < 0.3 && Math.abs(st.spin % 360) < 1) { this.toys.delete(toy); continue; }
@@ -615,20 +638,24 @@ const room = {
       const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, rm) : 0) + (toy ? toy.ox : 0), y = FY + p.r * T + (toy ? toy.oy : 0);
       const turned = toy ? (((p.a || 0) + Math.round(toy.spin / 10) * 10) % 360 + 360) % 360 : p.a;
       const busy = p.id !== "catwheel" || s.pets.some((pet, i) => !pet.hidden && pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
+      const sleeper = p.id === "bed" && here && actor.doing === "sleep" && Math.round(actor.x) === p.c && Math.round(actor.y) === p.r;
       items.push({ d: f.walk ? -1 : y + h * T - 1, draw: () => {
+        if (sleeper) return this.drawBedWithSleeper(g, p, x, y, night);
         drawPiece(g, p.id, x, y, busy ? t : 0, night, p.color, turned);
+        if (p.id === "bowl" && p.food > 0) this.drawFood(g, x, y, p.food);   // a round bowl looks the same turned
         if (p.a) return;
-        if ((p.id === "bowl" || p.id === "feeder") && p.food > 0) this.drawFood(g, x, y + (p.id === "feeder" ? -2 : 0), p.food);
+        if (p.id === "feeder" && p.food > 0) this.drawFood(g, x, y + 1, p.food);
         if (p.id === "hideout" || p.id === "doghouse") this.drawPeek(g, p, x, y);
-        if (p.id === "bed" && here && actor.doing === "sleep" && Math.round(actor.x) === p.c && Math.round(actor.y) === p.r) this.drawSleeper(g, x, y);
       } });
     });
-    if (here && !(actor.doing === "sleep" && rm.placed.some(p => p.id === "bed" && !p.a && p.c === Math.round(actor.x) && p.r === Math.round(actor.y)))) {
+    if (here && !(actor.doing === "sleep" && rm.placed.some(p => p.id === "bed" && p.c === Math.round(actor.x) && p.r === Math.round(actor.y)))) {
       const f = this.foot(actor.x, actor.y), cx = Math.round(actor.x), cy = Math.round(actor.y);
-      // Typing on the desk chair: drawn just before the chair, so its back hides all but the head
-      // and shoulders, the way someone sitting at a desk looks from behind.
-      const onChair = actor.doing === "type" && actor.dir === "up" && rm.placed.some(p => p.id === "chair" && p.c === cx && p.r === cy);
-      items.push({ d: onChair ? FY + cy * T + T - 1.5 : f.y + (actor.doing === "type" ? T : 0.5), draw: () => this.drawMe(g, f) });
+      // Sitting: on the seat, so drawn just after it; facing away (a seat or desk chair seen from
+      // behind), just before it, so the back hides all but the head and shoulders.
+      const seat = actor.doing === "sit" ? (rm.placed.includes(actor.seat) ? actor.seat : null)
+        : actor.doing === "type" ? rm.placed.find(p => p.id === "chair" && p.c === cx && p.r === cy) : null;
+      const d = seat ? depthOf(seat) + (actor.dir === "up" ? -0.5 : 0.5) : f.y + (actor.doing === "type" ? T : 0.5);
+      items.push({ d, draw: () => this.drawMe(g, f) });
     }
     s.pets.forEach((pet, i) => {
       const m = pets.moves[i];
@@ -660,19 +687,33 @@ const room = {
     const sitting = actor.doing === "sit" || actor.doing === "type";
     const pose = actor.doing === "walk" ? "walk" : "stand";
     const y = f.y - (sitting ? 2 : 0) - (actor.bob > 0 ? 1 : 0);
-    const x = f.x + (actor.doing === "type" ? underDesk(Math.round(actor.x), Math.round(actor.y), actor.rm()) : 0);
-    drawCharacter(g, game.state.look, x, y, actor.dir, pose, actor.anim);
+    let x = f.x + (actor.doing === "type" ? underDesk(Math.round(actor.x), Math.round(actor.y), actor.rm()) : 0);
+    // Sitting on a seat turned sideways: on its cushion, a little lower and away from the backrest.
+    const side = actor.doing === "sit" && (actor.dir === "left" || actor.dir === "right");
+    if (side) x += actor.dir === "left" ? -2 : 2;
+    drawCharacter(g, game.state.look, x, y + (side ? 7 : 0), actor.dir, pose, actor.anim);
   },
-  // Asleep in bed: the head on the pillow, the blanket pulled up, and the odd "z".
-  drawSleeper(g, x, y) {
-    const r = (c, a, b, w, h) => { g.fillStyle = c; g.fillRect(a, b, w, h); };
+  // Asleep (or resting) in bed: the head on the pillow, the blanket pulled up, and the odd "z".
+  // Drawn together with the bed, then painted and turned the way the bed is.
+  drawBedWithSleeper(g, p, x, y, night) {
+    const c = document.createElement("canvas"), o = c.getContext("2d", { willReadFrequently: true }), bx = 16, by = 40;
+    c.width = 64; c.height = 72;
+    drawFurniture(o, "bed", bx, by, 0, night);
+    const r = (col, a, b, w, h) => { o.fillStyle = col; o.fillRect(a, b, w, h); };
+    o.save();
+    o.beginPath(); o.rect(bx, by - 6, 16, 16); o.clip();
+    drawCharacter(o, game.state.look, bx + 8, by + 22, "down", "stand", 0.2);
+    o.restore();
+    r(G5, bx + 1, by + 9, 14, 18); r(G6, bx + 1, by + 9, 14, 2); r(G4, bx + 1, by + 26, 14, 1);
+    for (let k = 0; k < 3; k++) r(G4, bx + 1, by + 15 + k * 4, 14, 1);
+    if (COLORS[p.color || 0]) tintCanvas(c, COLORS[p.color]);
+    const [w, h] = game.size("bed", p.a), a = p.a || 0;
     g.save();
-    g.beginPath(); g.rect(x, y - 6, 16, 16); g.clip();
-    drawCharacter(g, game.state.look, x + 8, y + 22, "down", "stand", 0.2);
+    g.translate(Math.round(x + w * T / 2), Math.round(y + h * T / 2));
+    g.rotate(a * Math.PI / 180);
+    g.drawImage(c, -(bx + 8), -(by + 16));   // the bed's own middle (1 x 2 cells) on the footprint's middle
     g.restore();
-    r(G5, x + 1, y + 9, 14, 18); r(G6, x + 1, y + 9, 14, 2); r(G4, x + 1, y + 26, 14, 1);
-    for (let k = 0; k < 3; k++) r(G4, x + 1, y + 15 + k * 4, 14, 1);
-    if (Math.random() < dtChance(isNight() ? 0.6 : 0.2)) this.float(isNight() ? "z" : "~", x + 12, y - 2);   // asleep, or just resting
+    if (Math.random() < dtChance(isNight() ? 0.6 : 0.2)) this.float(isNight() ? "z" : "~", x + w * T - 4, y - 2);   // asleep, or just resting
   },
   // Kibble in a bowl: fuller bowls are heaped higher.
   drawFood(g, x, y, n) {
