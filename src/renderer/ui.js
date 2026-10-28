@@ -108,9 +108,15 @@ const ui = {
     canvas.addEventListener("contextmenu", e => { e.preventDefault(); if (room.deco) this.cancelHeld(); });
     addEventListener("keydown", e => {
       if (e.key === "Escape") return this.back();
+      if (e.target.closest && e.target.closest("input, select, textarea")) return;
+      // Delete (or Backspace) puts the piece picked or carried while decorating into storage.
+      if ((e.key === "Delete" || e.key === "Backspace") && room.deco && (room.deco.held || room.deco.selected)) {
+        e.preventDefault();
+        return this.storeHeld();
+      }
       // Arrow keys nudge the piece picked while decorating.
       const sel = room.deco && room.deco.selected, step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-      if (!step || !sel || !game.room().placed.includes(sel) || e.target.closest("input, select, textarea")) return;
+      if (!step || !sel || !game.room().placed.includes(sel)) return;
       e.preventDefault();
       game.nudge(sel, ...step);
       if (this.panel === "paint") this.render();
@@ -415,7 +421,7 @@ const ui = {
         <button class="btn small" data-act="nudge" data-id="-1,0" data-tip="왼쪽으로">←</button><button class="btn small" data-act="nudge" data-id="1,0" data-tip="오른쪽으로">→</button>
         ${f.wall ? "" : `<button class="btn small" data-act="nudge" data-id="0,-1" data-tip="뒤로">↑</button><button class="btn small" data-act="nudge" data-id="0,1" data-tip="앞으로">↓</button>`}
         ${sel.ox || sel.oy ? `<button class="btn small" data-act="nudge" data-id="">제자리</button>` : ""}</div>
-      <div class="row"><button class="btn small" data-act="moveSel">옮기기</button>${f.fixed ? "" : `<button class="btn small" data-act="storeSel">보관함에 넣기</button>`}</div>
+      <div class="row"><button class="btn small" data-act="moveSel">옮기기</button>${f.fixed ? "" : `<button class="btn small" data-act="storeSel" data-tip="Delete 키로도 넣을 수 있습니다">보관함에 넣기 (Del)</button>`}</div>
       <div class="wares">${COLOR_ORDER.map(n => card(pieceIcon(sel.id, n), n, n === (sel.color || 0), "paintPiece")).join("")}</div>`;
   },
 
@@ -1062,7 +1068,7 @@ async function boot() {
     ui.toast(`다른 앱에서 ${fmt(n)}타를 입력했습니다.`);
   });
   addEventListener("keydown", e => {
-    if (e.repeat || game.state.settings.typing !== "window" || e.target.closest("input, select, textarea")) return;
+    if (e.repeat || game.state.settings.typing !== "window") return;
     onKey();
   });
   // The phone's typing pad counts in either mode (counting other apps skips this one).
