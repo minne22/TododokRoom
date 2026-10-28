@@ -101,6 +101,20 @@ const FURN_ART = {
     r(G8, x + 9, y + 3, 3, 2); r(G0, x + 10, y + 6, 1, 1);
     return { x: x + 2, y: y - 3, w: 12, h: 17 };
   },
+  // A record player on a low cabinet of records; the record goes round and notes drift up.
+  turntable(r, x, y, t) {
+    r(G2, x + 1, y + 2, 14, 12); r(G5, x + 2, y + 3, 12, 10); r(G2, x + 8, y + 3, 1, 10);           // the cabinet
+    for (let k = 0; k < 4; k++) r(k % 2 ? G3 : G1, x + 3 + k, y + 5, 1, 7);                          // records on end
+    r(G2, x + 10, y + 7, 1, 2);
+    r(G1, x + 2, y + 14, 2, 1); r(G1, x + 12, y + 14, 2, 1);
+    r(G2, x + 1, y - 5, 14, 7); r(G7, x + 2, y - 4, 12, 5); r(G4, x + 2, y + 1, 12, 1);               // the player
+    r(G0, x + 4, y - 4, 6, 5); r(G0, x + 3, y - 3, 8, 3); r(G6, x + 6, y - 2, 2, 1);                 // the record
+    const spin = Math.floor(t * 4) % 4;
+    r(G3, x + [5, 9, 8, 4][spin], y + [-4, -3, 0, -1][spin], 1, 1);                                  // a glint going round
+    r(G1, x + 12, y - 4, 1, 1); r(G3, x + 12, y - 3, 1, 3); r(G3, x + 10, y - 1, 2, 1);              // the arm
+    if (t) { const up = Math.floor(t * 2) % 8; if (up < 6) { r(G1, x + 13, y - 9 - up, 1, 3); r(G1, x + 12, y - 7 - up, 1, 1); } }   // ♪
+    return { x: x + 1, y: y - 5, w: 14, h: 20 };
+  },
 
   desk(r, x, y, t, night) {
     r(G2, x + 1, y - 1, 30, 9); r(G7, x + 2, y, 28, 7);
@@ -439,6 +453,19 @@ const FURN_ART = {
     for (let k = 0; k < 5; k++) r(G1, x + 4 + k * 2, y + 3, 1, 4);                             // vents
     r(G0, x + 4, y - 3, 1, 5); r(G2, x + 2, y + 9, 12, 2); r(G1, x + 3, y + 11, 2, 3); r(G1, x + 11, y + 11, 2, 3);
     return { x: x + 2, y: y - 3, w: 12, h: 17 };
+  },
+  turntable_side(r, x, y) {
+    r(G2, x + 4, y + 2, 8, 12); r(G4, x + 5, y + 3, 6, 10); r(G1, x + 5, y + 14, 2, 1); r(G1, x + 9, y + 14, 2, 1);
+    r(G2, x + 4, y - 5, 8, 7); r(G7, x + 5, y - 4, 6, 5); r(G4, x + 5, y + 1, 6, 1);
+    r(G0, x + 5, y - 4, 4, 4); r(G6, x + 6, y - 3, 2, 1); r(G3, x + 10, y - 4, 1, 4);
+    return { x: x + 4, y: y - 5, w: 8, h: 20 };
+  },
+  turntable_back(r, x, y) {
+    r(G2, x + 1, y + 2, 14, 12); r(G4, x + 2, y + 3, 12, 10); r(G1, x + 2, y + 14, 2, 1); r(G1, x + 12, y + 14, 2, 1);
+    r(G2, x + 1, y - 5, 14, 7); r(G7, x + 2, y - 4, 12, 5); r(G4, x + 2, y + 1, 12, 1);
+    r(G0, x + 6, y - 4, 6, 5); r(G0, x + 5, y - 3, 8, 3); r(G6, x + 8, y - 2, 2, 1); r(G3, x + 3, y - 4, 1, 4);
+    r(G2, x + 4, y + 6, 1, 3); r(G2, x + 11, y + 6, 1, 3);                                             // plugs
+    return { x: x + 1, y: y - 5, w: 14, h: 20 };
   },
   speaker_side(r, x, y) {
     r(G0, x + 6, y - 6, 5, 19); r(G1, x + 6, y - 6, 5, 1); r(G3, x + 6, y - 3, 1, 3); r(G3, x + 6, y + 4, 1, 4);

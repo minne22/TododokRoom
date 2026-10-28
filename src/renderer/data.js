@@ -33,6 +33,7 @@ const FURNITURE = [
   { id: "lights",    name: "전구 줄",     price: 1500,  size: [1, 1], wall: true },
   { id: "radio",     name: "라디오",      price: 2400,  size: [1, 1] },
   { id: "speaker",   name: "스피커",      price: 2100,  size: [1, 1] },
+  { id: "turntable", name: "턴테이블",    price: 3900,  size: [1, 1] },
   { id: "bookshelf", name: "책장",        price: 2700,  size: [1, 1] },
   { id: "coffee",    name: "커피 머신",   price: 2700,  size: [1, 1] },
   { id: "easel",     name: "이젤",        price: 3000, size: [1, 1] },
@@ -93,7 +94,7 @@ const FURNITURE = [
 
 // How the shop sorts the furniture (pet things have their own panel; anything left out goes last).
 const FURN_GROUPS = [
-  ["거실", ["sofa", "armchair", "table", "bigtable", "tv", "rug", "bigrug", "cushion", "lamp", "floorlamp", "plant", "bigplant", "fishbowl", "speaker", "radio", "piano", "fireplace"]],
+  ["거실", ["sofa", "armchair", "table", "bigtable", "tv", "rug", "bigrug", "cushion", "lamp", "floorlamp", "plant", "bigplant", "fishbowl", "speaker", "radio", "turntable", "piano", "fireplace"]],
   ["침실", ["bed", "doublebed", "wardrobe", "dresser", "vanity", "nightstand", "mirror", "hanger"]],
   ["주방", ["diningtable", "chair", "counter", "sink", "stove", "fridge", "coffee"]],
   ["욕실", ["bathtub", "toilet", "washbasin", "washer"]],

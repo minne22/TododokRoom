@@ -98,7 +98,7 @@ function tintCanvas(c, hex) {
   return c;
 }
 // Pieces whose picture changes over time, and how: the rest are drawn once per colour.
-const ANIMATED = new Set(["desk", "speaker", "fishbowl", "coffee", "lights", "fireplace", "lamp", "catwheel", "tv", "washer", "fan", "aircon", "pond"]);
+const ANIMATED = new Set(["desk", "speaker", "fishbowl", "coffee", "lights", "fireplace", "lamp", "catwheel", "tv", "washer", "fan", "aircon", "pond", "turntable"]);
 const tintedCache = new Map();
 // How a piece turned `a` degrees is drawn: the picture to use (front, side or back), whether it's
 // mirrored, and how far the picture itself is turned. Flat pieces (seen from above) simply turn;
@@ -264,7 +264,7 @@ function seats(rm) {
   });
 }
 // How deep a placed piece is drawn (later = in front).
-const depthOf = p => game.piece(p.id).walk ? -1 : FY + p.r * T + game.size(p.id, p.a)[1] * T - 1;
+const depthOf = p => game.piece(p.id).walk ? -1 : FY + p.r * T + (p.oy || 0) + game.size(p.id, p.a)[1] * T - 1;
 const REST_AFTER_MS = 5000;   // with no typing for this long, the character goes to bed for a rest
 const roomWith = id => game.state.rooms.findIndex(r => r.placed.some(p => id === "bed" ? isBed(p) : p.id === id));
 
@@ -443,10 +443,12 @@ const pets = {
         }
         return;
       }
-      // Hungry with no food here but some in another room: go there.
+      // Hungry with no food here but some in another room: go there. (With no food anywhere, it
+      // goes about as usual.)
       const hungry = pet.full < PET_CARE.hungryBelow, hasFood = r => this.spots(pet.kind, "food", r).some(([p]) => p.food > 0);
+      const foodRoom = hungry && !hasFood(rm) ? rooms.findIndex(hasFood) : -1;
       let wantRoom = m.room;
-      if (hungry && !hasFood(rm)) { const k = rooms.findIndex(hasFood); if (k >= 0) wantRoom = k; }
+      if (foodRoom >= 0) wantRoom = foodRoom;
       else if (m.followIn !== undefined && (m.followIn -= dt) <= 0) { delete m.followIn; wantRoom = actor.at; }
       else if (m.wanderTo !== undefined) { if (rooms[m.wanderTo]) wantRoom = m.wanderTo; delete m.wanderTo; }
       if (wantRoom !== m.room && m.leaving !== wantRoom) {
@@ -455,12 +457,11 @@ const pets = {
       }
       if (!m.path && now > m.until && m.leaving == null && m.task !== "chase") {
         m.at = null; m.task = null;
-        // Now and then, off to see another room.
-        if (rooms.length > 1 && !hungry && !isNight() && Math.random() < 0.15) {
-          let k = Math.floor(Math.random() * (rooms.length - 1));
-          if (k >= m.room) k++;
-          m.wanderTo = k; m.until = now + 1000;
-          return;
+        // Now and then, off to see another room (at night, to wherever the character is).
+        if (rooms.length > 1 && !(hungry && hasFood(rm)) && Math.random() < 0.15) {
+          let k = isNight() ? actor.at : Math.floor(Math.random() * (rooms.length - 1));
+          if (!isNight() && k >= m.room) k++;
+          if (k !== m.room && rooms[k]) { m.wanderTo = k; m.until = now + 1000; return; }
         }
         const roll = Math.random(), food = hungry && this.spots(pet.kind, "food", rm).filter(([p]) => p.food > 0);
         let pick = null;
@@ -579,11 +580,12 @@ const room = {
   },
   point(e) { const b = this.canvas.getBoundingClientRect(); return { x: (e.clientX - b.left) / this.zoom, y: (e.clientY - b.top) / this.zoom }; },
 
-  // Where a placed piece shows on screen (a chair pushed in under the desk sits half a cell over).
+  // Where a placed piece shows on screen (a chair pushed in under the desk sits half a cell over;
+  // a nudged piece a few pixels off its cells).
   pieceBox(p) {
     const f = game.piece(p.id), [w, h] = game.size(p.id, p.a);
-    const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, game.room()) : 0);
-    return f.wall ? { x, y: WALL_TOP + 2, w: T, h: WALL_H - 4 } : { x, y: FY + p.r * T, w: w * T, h: h * T };
+    const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, game.room()) : 0) + (p.ox || 0);
+    return f.wall ? { x, y: WALL_TOP + 2, w: T, h: WALL_H - 4 } : { x, y: FY + p.r * T + (p.oy || 0), w: w * T, h: h * T };
   },
   // Page point -> the placed piece shown there (a solid piece before a rug), or null.
   pieceAtPoint(e) {
@@ -644,7 +646,7 @@ const room = {
     }
 
     // Wall pieces.
-    rm.placed.forEach(p => { if (game.piece(p.id).wall) drawPiece(g, p.id, MX + p.c * T, WALL_TOP + 6, t, night, p.color, p.a); });
+    rm.placed.forEach(p => { if (game.piece(p.id).wall) drawPiece(g, p.id, MX + p.c * T + (p.ox || 0), WALL_TOP + 6, t, night, p.color, p.a); });
 
     // Floor pieces, the character and pets, back to front. Rugs and cushions go first.
     const items = [], here = actor.at === cur;
@@ -653,7 +655,7 @@ const room = {
       if (f.wall) return;
       const [, h] = game.size(p.id, p.a);
       const toy = this.toys.get(p);
-      const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, rm) : 0) + (toy ? toy.ox : 0), y = FY + p.r * T + (toy ? toy.oy : 0);
+      const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, rm) : 0) + (p.ox || 0) + (toy ? toy.ox : 0), y = FY + p.r * T + (p.oy || 0) + (toy ? toy.oy : 0);
       const turned = toy ? (((p.a || 0) + Math.round(toy.spin / 10) * 10) % 360 + 360) % 360 : p.a;
       const busy = p.id !== "catwheel" || s.pets.some((pet, i) => !pet.hidden && pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
       const sleeper = f.bed && here && actor.doing === "sleep" && Math.round(actor.x) === p.c && Math.round(actor.y) === p.r;
@@ -673,12 +675,13 @@ const room = {
       const seat = actor.doing === "sit" ? (rm.placed.includes(actor.seat) ? actor.seat : null)
         : actor.doing === "type" ? rm.placed.find(p => p.id === "chair" && p.c === cx && p.r === cy) : null;
       const d = seat ? depthOf(seat) + (actor.dir === "up" ? -0.5 : 0.5) : f.y + (actor.doing === "type" ? T : 0.5);
-      items.push({ d, draw: () => this.drawMe(g, f) });
+      items.push({ d, draw: () => this.drawMe(g, seat ? { x: f.x + (seat.ox || 0), y: f.y + (seat.oy || 0) } : f) });
     }
     s.pets.forEach((pet, i) => {
       const m = pets.moves[i];
       if (!m || m.room !== cur || pet.hidden) return;
       const at = m.at && !m.path ? m.at : null, f = this.foot(m.x, m.y);
+      if (at) { f.x += at.ox || 0; f.y += at.oy || 0; }   // on a nudged piece
       if (at && !at.a && (at.id === "hideout" || at.id === "doghouse")) return;     // inside: drawn with the piece
       if (at && !at.a && at.id === "cattower") return items.push({ d: FY + at.r * T + T - 0.5, draw: () => this.drawPet(g, pet, m, { x: f.x, y: f.y - 16 }) });
       if (at && at.id === "scratcher" && pet.kind === "cat") return items.push({ d: depthOf(at) + 0.1, draw: () => this.drawPet(g, pet, m, { x: f.x + (m.dir === "left" ? -9 : 9), y: f.y }, false, true) });

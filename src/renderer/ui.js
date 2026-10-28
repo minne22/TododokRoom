@@ -106,7 +106,15 @@ const ui = {
     canvas.addEventListener("pointerleave", () => { if (room.deco) { room.deco.hover = null; room.deco.over = null; } });
     canvas.addEventListener("click", e => this.onRoomClick(e));
     canvas.addEventListener("contextmenu", e => { e.preventDefault(); if (room.deco) this.cancelHeld(); });
-    addEventListener("keydown", e => { if (e.key === "Escape") this.back(); });
+    addEventListener("keydown", e => {
+      if (e.key === "Escape") return this.back();
+      // Arrow keys nudge the piece picked while decorating.
+      const sel = room.deco && room.deco.selected, step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (!step || !sel || !game.room().placed.includes(sel) || e.target.closest("input, select, textarea")) return;
+      e.preventDefault();
+      game.nudge(sel, ...step);
+      if (this.panel === "paint") this.render();
+    });
     this.initTooltips();
     game.on("petGift", i => {
       const m = pets.moves[i];
@@ -403,6 +411,10 @@ const ui = {
       <div class="row turn"><span class="desc">회전 ${sel.a || 0}°</span>
         <button class="btn small" data-act="turn" data-id="-90">-90°</button><button class="btn small" data-act="turn" data-id="90">+90°</button>
         <button class="btn small" data-act="turn" data-id="-10">-10°</button><button class="btn small" data-act="turn" data-id="10">+10°</button></div>
+      <div class="row turn"><span class="desc">살짝 밀기</span>
+        <button class="btn small" data-act="nudge" data-id="-1,0" data-tip="왼쪽으로">←</button><button class="btn small" data-act="nudge" data-id="1,0" data-tip="오른쪽으로">→</button>
+        ${f.wall ? "" : `<button class="btn small" data-act="nudge" data-id="0,-1" data-tip="뒤로">↑</button><button class="btn small" data-act="nudge" data-id="0,1" data-tip="앞으로">↓</button>`}
+        ${sel.ox || sel.oy ? `<button class="btn small" data-act="nudge" data-id="">제자리</button>` : ""}</div>
       <div class="row"><button class="btn small" data-act="moveSel">옮기기</button>${f.fixed ? "" : `<button class="btn small" data-act="storeSel">보관함에 넣기</button>`}</div>
       <div class="wares">${COLOR_ORDER.map(n => card(pieceIcon(sel.id, n), n, n === (sel.color || 0), "paintPiece")).join("")}</div>`;
   },
@@ -687,6 +699,13 @@ const ui = {
       case "turn": {
         const sel = room.deco && room.deco.selected;
         if (sel && !game.turn(sel, +id)) this.toast("돌릴 자리가 없습니다. 주변을 비우고 다시 해 보세요.", 2500);
+        break;
+      }
+      case "nudge": {
+        const sel = room.deco && room.deco.selected;
+        if (!sel || !game.room().placed.includes(sel)) break;
+        if (id) game.nudge(sel, ...id.split(",").map(Number)); else game.nudge(sel);
+        this.render();
         break;
       }
       case "moveSel": this.moveSelected(); this.render(); break;

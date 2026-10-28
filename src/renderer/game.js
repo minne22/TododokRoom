@@ -373,6 +373,15 @@ const game = {
     this.emit("change");
     return true;
   },
+  // Nudge a placed piece a few pixels off its cells, to sit snug against its neighbours (it still
+  // takes up the same cells). Wall pieces only go sideways. No arguments: back on its cells.
+  nudge(p, dx = 0, dy = 0) {
+    const most = 8, keep = v => Math.max(-most, Math.min(most, v));
+    const ox = arguments.length > 1 ? keep((p.ox || 0) + dx) : 0, oy = arguments.length > 1 && !this.piece(p.id).wall ? keep((p.oy || 0) + dy) : 0;
+    if (ox) p.ox = ox; else delete p.ox;
+    if (oy) p.oy = oy; else delete p.oy;
+    this.emit("change");
+  },
   // Paint the wall or the floor of the room on screen (free, any time).
   paint(surface, color) {
     this.room()[surface === "wall" ? "wallColor" : "floorColor"] = color;
