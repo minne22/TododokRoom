@@ -400,12 +400,18 @@ const game = {
     this.emit("change");
     return true;
   },
-  editLp(i, { name, url, color }) {
+  // `pic`: the photo on the record (a small JPEG data URL, null for none), `picColor` its average
+  // colour for the tiny label in the room.
+  editLp(i, { name, url, color, pic, picColor }) {
     const lp = this.state.lps[i];
     if (!lp) return;
     lp.name = String(name || "").trim().slice(0, LP.nameMax) || `LP ${i + 1}`;
     lp.url = String(url || "").trim();
     if (COLORS[color] !== undefined) lp.color = color;
+    if (typeof pic === "string" && /^data:image\/jpeg;base64,[\w+/=]+$/.test(pic) && pic.length < 80000) {
+      lp.pic = pic;
+      if (/^#[0-9a-f]{6}$/.test(picColor)) lp.picColor = picColor; else delete lp.picColor;
+    } else if (pic === null) { delete lp.pic; delete lp.picColor; }
     this.emit("change");
   },
   // Make (k < 0) or change playlist `k`; returns its index.

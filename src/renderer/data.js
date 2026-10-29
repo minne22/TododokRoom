@@ -159,7 +159,7 @@ const PETS = {
 };
 // Little things for pets to wear, bought once and put on any of them.
 // LP records for the turntable: each plays a YouTube video or playlist given as a link.
-const LP = { price: 1500, nameMax: 12 };
+const LP = { price: 1500, nameMax: 12, picSize: 128 };   // picSize: a record's photo, cut square
 
 const PET_ACCESSORIES = [
   { id: "ribbon",   name: "리본",       price: 300 },

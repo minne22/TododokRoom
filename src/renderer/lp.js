@@ -112,6 +112,13 @@ const turntable = {
   },
 };
 
+// A record in the panel: a picture disc when it has a photo, else black vinyl with its label's colour.
+function lpDiscHtml(lp, id = "", cls = "") {
+  const extra = id ? ` id="${id}"` : "";
+  return lp && lp.pic ? `<span class="lp-pic lp-disc ${cls}"${extra} style="background-image:url(${lp.pic})"></span>`
+    : `<img class="lp-pic ${cls}"${extra} src="${lpIcon(lp ? lp.color : 0)}" alt="">`;
+}
+
 // A record as a picture: black vinyl with its label's colour.
 const lpIconCache = new Map();
 function lpIcon(color) {

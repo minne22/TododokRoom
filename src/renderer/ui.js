@@ -83,15 +83,40 @@ const ui = {
       if (e.key === "Escape" && e.target.id === "roomRename") { e.stopPropagation(); this.roomEdit = null; this.render(); }
       if (e.key === "Enter" && (e.target.id === "lpName" || e.target.id === "lpUrl")) $("#panelBody [data-act=lpEditSave]").click();
       if (e.key === "Enter" && e.target.id === "lpListName") $("#panelBody [data-act=lpListSave]").click();
-      if (e.key === "Escape" && (e.target.id === "lpName" || e.target.id === "lpUrl")) { e.stopPropagation(); this.lpEdit = null; this.render(); }
+      if (e.key === "Escape" && (e.target.id === "lpName" || e.target.id === "lpUrl")) { e.stopPropagation(); this.lpEdit = this.lpCrop = null; this.render(); }
     });
     for (const el of ["#panelBody", "#panelTabs"]) $(el).addEventListener("change", e => { if (e.target.dataset.sel) this.pick(e.target.dataset.sel, e.target.value); });
+    // A record's photo: chosen, then dragged into place and sized in the circle.
+    $("#panelBody").addEventListener("pointerdown", e => {
+      if (e.target.id !== "lpCropCv") return;
+      this.lpDrag = { x: e.clientX, y: e.clientY };
+      e.target.setPointerCapture(e.pointerId);
+    });
+    $("#panelBody").addEventListener("pointermove", e => {
+      const d = this.lpDrag, c = this.lpCrop;
+      if (!d || !c || e.target.id !== "lpCropCv") return;
+      const k = e.target.width / e.target.getBoundingClientRect().width, s = e.target.width / Math.min(c.img.naturalWidth, c.img.naturalHeight) * c.z;
+      c.cx -= (e.clientX - d.x) * k / s; c.cy -= (e.clientY - d.y) * k / s;
+      d.x = e.clientX; d.y = e.clientY;
+      this.lpCropDraw();
+    });
+    $("#panelBody").addEventListener("pointerup", () => { this.lpDrag = null; });
+    $("#panelBody").addEventListener("wheel", e => {
+      if (e.target.id !== "lpCropCv" || !this.lpCrop) return;
+      e.preventDefault();
+      const c = this.lpCrop;
+      c.z = Math.min(4, Math.max(1, c.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+      const el = $("#lpZoom"); if (el) el.value = Math.round(c.z * 100);
+      this.lpCropDraw();
+    }, { passive: false });
+    $("#panelBody").addEventListener("change", e => { if (e.target.id === "lpPicFile") { this.lpPicLoad(e.target.files[0]); e.target.value = ""; } });
     $("#panelBody").addEventListener("change", e => { if (e.target.id === "lpSeek") { this.lpSeeking = false; turntable.control("seek", +e.target.value); } });
     $("#panelBody").addEventListener("input", e => {
       if (e.target.id === "lookName") this.draft.name = e.target.value;
       if (e.target.id === "lpName" && this.lpEdit) this.lpEdit.name = e.target.value;
       if (e.target.id === "lpUrl" && this.lpEdit) this.lpEdit.url = e.target.value;
       if (e.target.id === "lpVolume") turntable.setVolume(e.target.value / 100);
+      if (e.target.id === "lpZoom" && this.lpCrop) { this.lpCrop.z = e.target.value / 100; this.lpCropDraw(); }
       if (e.target.id === "lpListName" && this.lpListEdit) this.lpListEdit.name = e.target.value;
       // Dragging along the bar: the time follows, and the music jumps there on letting go.
       if (e.target.id === "lpSeek") { this.lpSeeking = true; const t = +e.target.value; $("#lpAt").textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; }
@@ -255,6 +280,7 @@ const ui = {
     body.scrollTop = scroll;
     if (this.panel === "settings") this.bindSettings();
     if (this.panel === "closet") this.drawPreview();
+    if (this.lpCrop) this.lpCropDraw();
     // A piece just chosen: its turning and colours come into view.
     if (this.panel === "paint" && this.scrollToSel) {
       this.scrollToSel = false;
@@ -349,27 +375,34 @@ const ui = {
     if (seek && !this.lpSeeking) { seek.max = Math.max(1, Math.floor(st.dur || 0)); seek.value = Math.floor(st.at || 0); $("#lpAt").textContent = time(st.at || 0); }
     if (seek) $("#lpDur").textContent = time(st.dur || 0);
     if (pause) { pause.textContent = st.paused ? "재생" : "일시정지"; pause.classList.toggle("on", !st.paused); }
+    const pic = $("#lpNowPic");
+    if (pic) pic.classList.toggle("spin", !!st.playing && !st.paused);
   },
   lpHtml() {
     const s = game.state, p = this.lpPiece(), on = p && s.lps[p.lp], playing = turntable.playing(p), edit = this.lpEdit;
     const where = p && game.allPlaced().filter(q => q.id === "turntable").length > 1 ? ` · ${esc(game.roomName(s.rooms.findIndex(r => r.placed.includes(p))))}` : "";
     const now = !p ? `<div class="card"><div class="desc">턴테이블이 아직 없습니다. 상점 › 가구 › 거실에서 사서 방에 놓아 주세요.</div></div>`
       : `<div class="card"><div class="title">지금 턴테이블${where}</div>
-        <div class="row lp-row"><img class="lp-pic" src="${lpIcon(on ? on.color : 0)}" alt=""><div class="grow"><b>${on ? esc(on.name) : "비어 있음"}</b><div class="desc" id="lpNow">${this.lpNowText()}</div></div>
+        <div class="row lp-row">${lpDiscHtml(on, "lpNowPic", playing && !(turntable.status || {}).paused ? "spin" : "")}<div class="grow"><b>${on ? esc(on.name) : "비어 있음"}</b><div class="desc" id="lpNow">${this.lpNowText()}</div></div>
           ${on ? `${playing ? `<button class="btn small" data-act="lpStop">정지</button>` : `<button class="btn small on" data-act="lpPlay">재생</button>`}<button class="btn small" data-act="lpOff">빼기</button>` : ""}</div>
         ${playing ? `<div class="lp-bar"><span id="lpAt">0:00</span><input type="range" id="lpSeek" min="0" max="1" step="1" value="0" aria-label="재생 위치"><span id="lpDur">0:00</span></div>
         <div class="lp-ctl"><button class="btn small" data-act="lpSkip" data-id="-10">◀◀ 10초</button><button class="btn small on" id="lpPause" data-act="lpPause">일시정지</button><button class="btn small" data-act="lpSkip" data-id="10">10초 ▶▶</button><button class="btn small" data-act="lpNext">다음 LP ▶|</button></div>` : ""}
         <div class="slider-row"><span class="label">볼륨</span><input type="range" id="lpVolume" min="0" max="100" value="${Math.round(s.settings.sound.lpVolume * 100)}" aria-label="턴테이블 볼륨"></div></div>`;
     const rows = s.lps.map((lp, i) => edit && edit.i === i
-      ? `<div class="lp-edit"><div class="row lp-row"><img class="lp-pic" src="${lpIcon(edit.color)}" alt=""><input id="lpName" maxlength="${LP.nameMax}" value="${esc(edit.name)}" placeholder="LP 이름" aria-label="LP 이름"></div>
+      ? `<div class="lp-edit"><div class="row lp-row">${lpDiscHtml(edit)}<input id="lpName" maxlength="${LP.nameMax}" value="${esc(edit.name)}" placeholder="LP 이름" aria-label="LP 이름"></div>
           <input id="lpUrl" value="${esc(edit.url)}" placeholder="유튜브 링크 (영상 또는 재생목록)" aria-label="유튜브 링크">
+          ${this.lpCrop ? `<div class="lp-crop"><canvas id="lpCropCv" width="${LP.picSize}" height="${LP.picSize}" aria-label="사진 자르기"></canvas>
+            <div class="desc">사진을 끌어서 자리를 잡고, 막대나 휠로 크기를 맞추세요.</div>
+            <div class="slider-row"><span class="label">크기</span><input type="range" id="lpZoom" min="100" max="400" value="${Math.round(this.lpCrop.z * 100)}" aria-label="사진 크기"></div>
+            <div class="row"><span class="grow"></span><button class="btn small" data-act="lpCropCancel">취소</button><button class="btn small on" data-act="lpCropOk">이대로 자르기</button></div></div>`
+          : `<div class="row">${edit.pic ? `<button class="btn small" data-act="lpPicOff">사진 빼기</button>` : ""}<span class="grow"></span><button class="btn small" data-act="lpPicPick">${edit.pic ? "사진 바꾸기" : "사진 넣기"}</button><input type="file" id="lpPicFile" accept="image/*" hidden></div>`}
           <div class="swatches">${COLOR_ORDER.filter(n => n).map(n => `<button class="sw${n === edit.color ? " on" : ""}" style="background:${COLORS[n]}" data-act="lpColor" data-id="${n}" aria-label="${COLOR_NAMES[n]}"></button>`).join("")}</div>
           <div class="row"><span class="grow"></span><button class="btn small" data-act="lpEditCancel">취소</button><button class="btn small on" data-act="lpEditSave">저장</button></div></div>`
-      : `<div class="row lp-row"><img class="lp-pic" src="${lpIcon(lp.color)}" alt=""><div class="grow"><b>${esc(lp.name)}</b><div class="desc">${!lp.url ? "링크 없음" : parseYouTube(lp.url) ? "유튜브 링크" : "링크를 확인해 주세요"}</div></div>
+      : `<div class="row lp-row">${lpDiscHtml(lp)}<div class="grow"><b>${esc(lp.name)}</b><div class="desc">${!lp.url ? "링크 없음" : parseYouTube(lp.url) ? "유튜브 링크" : "링크를 확인해 주세요"}</div></div>
           ${!p ? "" : p.lp === i ? `<span class="tag">올려 둠</span>` : `<button class="btn small" data-act="lpOn" data-id="${i}">올리기</button>`}<button class="btn small" data-act="lpEdit" data-id="${i}">편집</button></div>`).join("");
     return now + this.lpListsHtml(p) + `<div class="card"><div class="title">내 LP판 · ${s.lps.length}장</div>${rows || `<div class="desc">아직 LP판이 없습니다.</div>`}
         <div class="row"><b>새 LP판</b>${priceHtml(LP.price)}<span class="grow"></span>${buyBtn("사기", "lpBuy", "", LP.price)}</div></div>
-      <div class="desc">LP판마다 유튜브 영상이나 재생목록 링크를 넣어 두고, 턴테이블에 올리면 그 음악이 나옵니다. 영상은 보이지 않고 소리만 나오며, 끝나면 처음부터 다시 돕니다. 재생하는 동안 배경음은 잠시 쉽니다.</div>`;
+      <div class="desc">LP판마다 유튜브 영상이나 재생목록 링크를 넣어 두고, 턴테이블에 올리면 그 음악이 나옵니다. 영상은 보이지 않고 소리만 나옵니다. 편집에서 LP판에 사진을 넣을 수도 있습니다. 재생하는 동안 배경음은 잠시 쉽니다.</div>`;
   },
   // Playlists: play one on the turntable, or make / change one by picking records in order.
   lpListsHtml(p) {
@@ -387,9 +420,60 @@ const ui = {
   },
   lpEditStart(i) {
     const lp = game.state.lps[i];
-    this.lpEdit = { i, name: lp.name, url: lp.url, color: lp.color };
+    this.lpEdit = { i, name: lp.name, url: lp.url, color: lp.color, pic: lp.pic || null, picColor: lp.picColor };
+    this.lpCrop = null;
     this.render();
     setTimeout(() => { const el = $(lp.url ? "#lpName" : "#lpUrl"); if (el) el.focus(); });
+  },
+  // Cutting a photo for a record: `lpCrop` is { img, z (zoom, 1 = the short side just fills the
+  // circle), cx, cy (the photo's point at the middle, in its own pixels) }.
+  lpCropPaint(g, n) {
+    const c = this.lpCrop, w = c.img.naturalWidth, h = c.img.naturalHeight, s = n / Math.min(w, h) * c.z, half = n / 2 / s;
+    c.cx = Math.min(Math.max(c.cx, half), w - half); c.cy = Math.min(Math.max(c.cy, half), h - half);
+    g.imageSmoothingQuality = "high";
+    g.clearRect(0, 0, n, n);
+    g.drawImage(c.img, n / 2 - c.cx * s, n / 2 - c.cy * s, w * s, h * s);
+  },
+  lpCropDraw() {
+    const cv = $("#lpCropCv");
+    if (!cv || !this.lpCrop) return;
+    const g = cv.getContext("2d"), n = cv.width;
+    this.lpCropPaint(g, n);
+    // What falls outside the record dims; the record's rim and middle hole drawn over.
+    g.fillStyle = "rgba(0,0,0,0.6)";
+    g.beginPath(); g.rect(0, 0, n, n); g.arc(n / 2, n / 2, n / 2 - 1, 0, Math.PI * 2); g.fill("evenodd");
+    g.strokeStyle = "#fff"; g.lineWidth = 1;
+    g.beginPath(); g.arc(n / 2, n / 2, n / 2 - 1.5, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = "#111"; g.beginPath(); g.arc(n / 2, n / 2, n * 0.08, 0, Math.PI * 2); g.fill();
+  },
+  lpPicLoad(file) {
+    if (!file || !this.lpEdit) return;
+    const read = new FileReader();
+    read.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        if (!this.lpEdit) return;
+        this.lpCrop = { img, z: 1, cx: img.naturalWidth / 2, cy: img.naturalHeight / 2 };
+        this.render();
+      };
+      img.onerror = () => this.toast("이 사진은 열 수 없습니다.", 2500);
+      img.src = read.result;
+    };
+    read.readAsDataURL(file);
+  },
+  lpCropOk() {
+    const ed = this.lpEdit;
+    if (!ed || !this.lpCrop) return;
+    const cv = document.createElement("canvas"), n = cv.width = cv.height = LP.picSize, g = cv.getContext("2d");
+    g.fillStyle = "#222"; g.fillRect(0, 0, n, n);
+    this.lpCropPaint(g, n);
+    ed.pic = cv.toDataURL("image/jpeg", 0.85);
+    // Its average colour, for the little label on the turntable in the room.
+    const px = g.getImageData(0, 0, n, n).data, sum = [0, 0, 0];
+    for (let k = 0; k < px.length; k += 4) for (let j = 0; j < 3; j++) sum[j] += px[k + j];
+    ed.picColor = "#" + sum.map(v => Math.round(v / (n * n)).toString(16).padStart(2, "0")).join("");
+    this.lpCrop = null;
+    this.render();
   },
   // Play what's on turntable `p` (a record with no link just sits there, said in a toast).
   lpStart(p) {
@@ -819,13 +903,17 @@ const ui = {
         if (game.buyLp()) { this.toast("LP판을 샀습니다. 유튜브 링크를 넣어 주세요.", 3000); this.lpEditStart(s.lps.length - 1); }
         break;
       case "lpEdit": this.lpEditStart(+id); break;
-      case "lpEditCancel": this.lpEdit = null; this.render(); break;
+      case "lpEditCancel": this.lpEdit = this.lpCrop = null; this.render(); break;
+      case "lpPicPick": { const el = $("#lpPicFile"); if (el) el.click(); break; }
+      case "lpPicOff": if (this.lpEdit) { this.lpEdit.pic = null; this.render(); } break;
+      case "lpCropCancel": this.lpCrop = null; this.render(); break;
+      case "lpCropOk": this.lpCropOk(); break;
       case "lpColor": if (this.lpEdit) { this.lpEdit.color = +id; this.render(); } break;
       case "lpEditSave": {
         const ed = this.lpEdit;
         if (!ed) break;
         if (ed.url.trim() && !parseYouTube(ed.url)) { this.toast("유튜브 영상이나 재생목록 링크를 넣어 주세요.", 3000); break; }
-        this.lpEdit = null;
+        this.lpEdit = this.lpCrop = null;
         game.editLp(ed.i, ed);
         // The record playing now: play it again with its new link.
         if (turntable.piece && turntable.piece.lp === ed.i) this.lpStart(turntable.piece);
@@ -913,7 +1001,7 @@ const ui = {
         pets.chase(p, game.state.cur);
         return;
       }
-      if (p && p.id === "turntable") { this.lpTable = p; this.lpEdit = null; return this.panel === "lp" ? this.render() : this.open("lp"); }
+      if (p && p.id === "turntable") { this.lpTable = p; this.lpEdit = this.lpCrop = null; return this.panel === "lp" ? this.render() : this.open("lp"); }
       if (p && p.id === "bowl") {
         const r = game.fillBowl(p), f = room.pieceBox(p);
         if (r === "ok") room.float("밥!", f.x + 8, f.y + 4);

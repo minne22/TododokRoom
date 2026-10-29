@@ -746,7 +746,7 @@ const room = {
   drawRecord(g, p, x, y) {
     const r = (c, a, b, w, h) => { g.fillStyle = c; g.fillRect(a, b, w, h); }, lp = game.state.lps[p.lp];
     if (!lp) { r(G4, x + 4, y - 4, 6, 5); r(G4, x + 3, y - 3, 8, 3); r(G3, x + 4, y - 3, 6, 3); r(G1, x + 6, y - 2, 2, 1); return; }
-    r(COLORS[lp.color] || G6, x + 6, y - 2, 2, 1);
+    r(lp.picColor || COLORS[lp.color] || G6, x + 6, y - 2, 2, 1);
   },
   // A pet tucked inside a hideout or dog house: just its eyes in the dark doorway.
   drawPeek(g, p, x, y) {
