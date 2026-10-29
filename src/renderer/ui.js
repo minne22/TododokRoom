@@ -81,10 +81,15 @@ const ui = {
       if (e.key === "Escape" && e.target.id === "petRename") { e.stopPropagation(); this.petEdit = null; this.render(); }
       if (e.key === "Enter" && e.target.id === "roomRename") $("#panelBody [data-act=roomRenameSave]").click();
       if (e.key === "Escape" && e.target.id === "roomRename") { e.stopPropagation(); this.roomEdit = null; this.render(); }
+      if (e.key === "Enter" && (e.target.id === "lpName" || e.target.id === "lpUrl")) $("#panelBody [data-act=lpEditSave]").click();
+      if (e.key === "Escape" && (e.target.id === "lpName" || e.target.id === "lpUrl")) { e.stopPropagation(); this.lpEdit = null; this.render(); }
     });
     for (const el of ["#panelBody", "#panelTabs"]) $(el).addEventListener("change", e => { if (e.target.dataset.sel) this.pick(e.target.dataset.sel, e.target.value); });
     $("#panelBody").addEventListener("input", e => {
       if (e.target.id === "lookName") this.draft.name = e.target.value;
+      if (e.target.id === "lpName" && this.lpEdit) this.lpEdit.name = e.target.value;
+      if (e.target.id === "lpUrl" && this.lpEdit) this.lpEdit.url = e.target.value;
+      if (e.target.id === "lpVolume") turntable.setVolume(e.target.value / 100);
       if (e.target.id === "petName") {
         this.adopt.name = e.target.value;
         const b = $("#panelBody [data-act=adopt]");
@@ -226,6 +231,7 @@ const ui = {
     if (this.panel === "closet") [title, tabs, html] = [game.state.created ? "캐릭터 꾸미기" : "캐릭터 만들기", this.closetTabs(), this.closetHtml()];
     if (this.panel === "paint") [title, tabs, html] = ["집 꾸미기", this.paintTabs(), this.paintHtml()];
     if (this.panel === "record") [title, html] = ["기록", this.recordHtml()];
+    if (this.panel === "lp") [title, html] = ["턴테이블", this.lpHtml()];
     if (this.panel === "settings") [title, html] = ["설정", this.settingsHtml()];
     $("#panelTitle").textContent = title;
     // Decorating the character: a way back to decorating the house.
@@ -257,7 +263,7 @@ const ui = {
 
   shopTabs() {
     const t = this.tab.shop;
-    const main = [["furniture", "가구"], ["theme", "벽·바닥"], ["room", "방"], ["looks", "옷·꾸미기"]].map(([id, name]) =>
+    const main = [["furniture", "가구"], ["theme", "벽·바닥"], ["room", "방"], ["looks", "옷·꾸미기"], ["lp", "LP판"]].map(([id, name]) =>
       `<button class="btn${id === t ? " on" : ""}" data-act="shopTab" data-id="${id}">${name}</button>`).join("");
     return main;
   },
@@ -309,8 +315,56 @@ const ui = {
         }).join("");
         return sub + `<div class="wares">${wares}</div>`;
       }
+      case "lp": return this.lpHtml();
     }
     return "";
+  },
+
+  // ---------- the turntable and LP records ----------
+
+  // The turntable the panel is about: the one clicked, else the one playing, else one in this room
+  // (or anywhere).
+  lpPiece() {
+    const tables = game.allPlaced().filter(p => p.id === "turntable");
+    if (!tables.includes(this.lpTable)) this.lpTable = turntable.piece || game.room().placed.find(p => p.id === "turntable") || tables[0] || null;
+    return this.lpTable;
+  },
+  lpNowText() {
+    const p = this.lpPiece();
+    if (!turntable.playing(p)) return p && game.state.lps[p.lp] ? "멈춤" : "LP판을 올려 주세요";
+    const st = turntable.status || {};
+    return st.title ? `♪ ${esc(st.title)}` : "불러오는 중…";
+  },
+  lpStatusChanged() { const el = $("#lpNow"); if (el) el.innerHTML = this.lpNowText(); },
+  lpHtml() {
+    const s = game.state, p = this.lpPiece(), on = p && s.lps[p.lp], playing = turntable.playing(p), edit = this.lpEdit;
+    const where = p && game.allPlaced().filter(q => q.id === "turntable").length > 1 ? ` · ${esc(game.roomName(s.rooms.findIndex(r => r.placed.includes(p))))}` : "";
+    const now = !p ? `<div class="card"><div class="desc">턴테이블이 아직 없습니다. 상점 › 가구 › 거실에서 사서 방에 놓아 주세요.</div></div>`
+      : `<div class="card"><div class="title">지금 턴테이블${where}</div>
+        <div class="row lp-row"><img class="lp-pic" src="${lpIcon(on ? on.color : 0)}" alt=""><div class="grow"><b>${on ? esc(on.name) : "비어 있음"}</b><div class="desc" id="lpNow">${this.lpNowText()}</div></div>
+          ${on ? `${playing ? `<button class="btn small" data-act="lpStop">정지</button>` : `<button class="btn small on" data-act="lpPlay">재생</button>`}<button class="btn small" data-act="lpOff">빼기</button>` : ""}</div>
+        <div class="slider-row"><span class="label">볼륨</span><input type="range" id="lpVolume" min="0" max="100" value="${Math.round(s.settings.sound.lpVolume * 100)}" aria-label="턴테이블 볼륨"></div></div>`;
+    const rows = s.lps.map((lp, i) => edit && edit.i === i
+      ? `<div class="lp-edit"><div class="row lp-row"><img class="lp-pic" src="${lpIcon(edit.color)}" alt=""><input id="lpName" maxlength="${LP.nameMax}" value="${esc(edit.name)}" placeholder="LP 이름" aria-label="LP 이름"></div>
+          <input id="lpUrl" value="${esc(edit.url)}" placeholder="유튜브 링크 (영상 또는 재생목록)" aria-label="유튜브 링크">
+          <div class="swatches">${COLOR_ORDER.filter(n => n).map(n => `<button class="sw${n === edit.color ? " on" : ""}" style="background:${COLORS[n]}" data-act="lpColor" data-id="${n}" aria-label="${COLOR_NAMES[n]}"></button>`).join("")}</div>
+          <div class="row"><span class="grow"></span><button class="btn small" data-act="lpEditCancel">취소</button><button class="btn small on" data-act="lpEditSave">저장</button></div></div>`
+      : `<div class="row lp-row"><img class="lp-pic" src="${lpIcon(lp.color)}" alt=""><div class="grow"><b>${esc(lp.name)}</b><div class="desc">${!lp.url ? "링크 없음" : parseYouTube(lp.url) ? "유튜브 링크" : "링크를 확인해 주세요"}</div></div>
+          ${!p ? "" : p.lp === i ? `<span class="tag">올려 둠</span>` : `<button class="btn small" data-act="lpOn" data-id="${i}">올리기</button>`}<button class="btn small" data-act="lpEdit" data-id="${i}">편집</button></div>`).join("");
+    return now + `<div class="card"><div class="title">내 LP판 · ${s.lps.length}장</div>${rows || `<div class="desc">아직 LP판이 없습니다.</div>`}
+        <div class="row"><b>새 LP판</b>${priceHtml(LP.price)}<span class="grow"></span>${buyBtn("사기", "lpBuy", "", LP.price)}</div></div>
+      <div class="desc">LP판마다 유튜브 영상이나 재생목록 링크를 넣어 두고, 턴테이블에 올리면 그 음악이 나옵니다. 영상은 보이지 않고 소리만 나오며, 끝나면 처음부터 다시 돕니다. 재생하는 동안 배경음은 잠시 쉽니다.</div>`;
+  },
+  lpEditStart(i) {
+    const lp = game.state.lps[i];
+    this.lpEdit = { i, name: lp.name, url: lp.url, color: lp.color };
+    this.render();
+    setTimeout(() => { const el = $(lp.url ? "#lpName" : "#lpUrl"); if (el) el.focus(); });
+  },
+  // Play what's on turntable `p` (a record with no link just sits there, said in a toast).
+  lpStart(p) {
+    const ok = turntable.play(p);
+    if (ok !== true) { this.toast(ok, 3000); this.render(); }
   },
 
   // A furniture card for the shop.
@@ -731,6 +785,27 @@ const ui = {
         break;
       }
       case "roomEditCancel": this.roomEdit = null; this.render(); break;
+      case "lpBuy":
+        if (game.buyLp()) { this.toast("LP판을 샀습니다. 유튜브 링크를 넣어 주세요.", 3000); this.lpEditStart(s.lps.length - 1); }
+        break;
+      case "lpEdit": this.lpEditStart(+id); break;
+      case "lpEditCancel": this.lpEdit = null; this.render(); break;
+      case "lpColor": if (this.lpEdit) { this.lpEdit.color = +id; this.render(); } break;
+      case "lpEditSave": {
+        const ed = this.lpEdit;
+        if (!ed) break;
+        if (ed.url.trim() && !parseYouTube(ed.url)) { this.toast("유튜브 영상이나 재생목록 링크를 넣어 주세요.", 3000); break; }
+        this.lpEdit = null;
+        game.editLp(ed.i, ed);
+        // The record playing now: play it again with its new link.
+        if (turntable.piece && turntable.piece.lp === ed.i) this.lpStart(turntable.piece);
+        else this.render();
+        break;
+      }
+      case "lpOn": { const p = this.lpPiece(); if (p) { game.putLp(p, +id); this.lpStart(p); } break; }
+      case "lpOff": { const p = this.lpPiece(); if (p) { if (turntable.playing(p)) turntable.stop(); game.putLp(p, null); } break; }
+      case "lpPlay": { const p = this.lpPiece(); if (p) this.lpStart(p); break; }
+      case "lpStop": turntable.stop(); break;
       case "paintPiece": {
         const sel = room.deco && room.deco.selected;
         if (!sel || !game.room().placed.includes(sel)) break;
@@ -778,6 +853,7 @@ const ui = {
         pets.chase(p, game.state.cur);
         return;
       }
+      if (p && p.id === "turntable") { this.lpTable = p; this.lpEdit = null; return this.panel === "lp" ? this.render() : this.open("lp"); }
       if (p && p.id === "bowl") {
         const r = game.fillBowl(p), f = room.pieceBox(p);
         if (r === "ok") room.float("밥!", f.x + 8, f.y + 4);
@@ -840,7 +916,7 @@ const ui = {
       d.press = null;
       if (!game.room().placed.includes(p)) return;
       game.lift(p);
-      d.held = { id: p.id, keep: { color: p.color, a: p.a, food: p.food }, from: { c: p.c, r: p.r }, drag: true };
+      d.held = { id: p.id, keep: { color: p.color, a: p.a, food: p.food, lp: p.lp }, from: { c: p.c, r: p.r }, drag: true };
       d.selected = null;
       this.renderStorage();
     }
@@ -889,7 +965,7 @@ const ui = {
     const d = room.deco, p = d && d.selected;
     if (!p || !game.room().placed.includes(p)) return;
     game.lift(p);
-    d.held = { id: p.id, keep: { color: p.color, a: p.a, food: p.food }, from: { c: p.c, r: p.r } };
+    d.held = { id: p.id, keep: { color: p.color, a: p.a, food: p.food, lp: p.lp }, from: { c: p.c, r: p.r } };
     d.selected = null;
     this.renderStorage();
   },

@@ -96,6 +96,7 @@ function createWindow() {
   const saved = loadPlace();
   placeWindow(320, 300, saved || { right: area.x + area.width - MARGIN, bottom: area.y + area.height - MARGIN });
   win.on("moved", savePlace);
+  win.on("closed", stopPlayer);   // the turntable stops with the room
   win.once("ready-to-show", () => win.show());
 
   // TODOK_DEMO=1: start from a made-up save (never saved), for checking the art.
@@ -162,6 +163,49 @@ ipcMain.handle("set-admin-always", async (_, on) => {
   return on && !isElevated() ? relaunchElevated() : true;
 });
 ipcMain.handle("relaunch-admin", () => relaunchElevated());
+// The turntable: a YouTube video (or playlist) played in a window that's never shown, so only its
+// sound comes through. The page sends what to play; nothing else goes to YouTube.
+let player = null, playerVolume = 0.6;
+function stopPlayer() {
+  if (player && !player.isDestroyed()) player.destroy();
+  player = null;
+}
+ipcMain.on("lp-play", (_, what, volume) => {
+  stopPlayer();
+  const id = /^[\w-]{6,64}$/;
+  if (!what || !(id.test(what.v || "") || id.test(what.list || ""))) return;
+  playerVolume = Number(volume) || 0;
+  player = new BrowserWindow({ show: false, width: 480, height: 270, webPreferences: { backgroundThrottling: false, autoplayPolicy: "no-user-gesture-required" } });
+  player.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  player.webContents.on("will-navigate", e => e.preventDefault());
+  player.webContents.on("did-finish-load", () => setPlayerVolume(playerVolume));
+  const url = what.v
+    ? `https://www.youtube.com/embed/${what.v}?autoplay=1&loop=1&playlist=${what.v}`
+    : `https://www.youtube.com/embed/videoseries?list=${what.list}&autoplay=1&loop=1`;
+  // YouTube only plays embedded videos for a page that says where it is.
+  player.loadURL(url, { httpReferrer: "https://github.com/minne22/TododokRoom" }).catch(() => {});
+});
+ipcMain.on("lp-stop", stopPlayer);
+function setPlayerVolume(v) {
+  playerVolume = Number(v) || 0;
+  if (player && !player.isDestroyed()) player.webContents.executeJavaScript(`document.querySelectorAll("video").forEach(v => v.volume = ${playerVolume})`).catch(() => {});
+}
+ipcMain.on("lp-volume", (_, v) => setPlayerVolume(v));
+// What's playing: { on, playing, title, error } (error: what YouTube shows instead, e.g. for a
+// video that may not be played elsewhere).
+ipcMain.handle("lp-status", async () => {
+  if (!player || player.isDestroyed()) return { on: false };
+  try {
+    return { on: true, ...await player.webContents.executeJavaScript(`(() => {
+      const v = document.querySelector("video"), err = document.querySelector(".ytp-error, .ytp-error-content-wrap-reason");
+      if (v) { v.volume = ${playerVolume}; if (v.paused && v.readyState > 2) v.play().catch(() => {}); }
+      const t = document.querySelector(".ytp-title-link"), title = (t && t.textContent.trim()) || document.title.replace(/ - YouTube$/, "");
+      return { playing: !!v && !v.paused, title: title === "YouTube" ? "" : title, ad: !!document.querySelector(".ad-showing"),
+        at: v ? Math.round(v.currentTime) : 0, error: err ? err.textContent.trim() : "" };
+    })()`) };
+  } catch (e) { return { on: true, playing: false }; }
+});
+
 ipcMain.on("minimize", () => win.minimize());
 ipcMain.on("quit", () => app.quit());
 

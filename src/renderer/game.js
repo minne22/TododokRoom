@@ -44,6 +44,7 @@ function newState() {
     unlocked: [],        // bought clothes/hair/accessories, as "key:index"
     pets: [],            // { kind: "cat" | "dog", color, name, full (0–100), giftIn (seconds), acc (worn accessory), hidden }
     petAcc: [],          // accessories bought for pets
+    lps: [],             // LP records: { name, url (YouTube link), color (label, index into COLORS) }
     food: 3,             // bags of pet food
     settings: {
       // "global" (whole PC / phone) | "window" (only while this window has focus). On the phone,
@@ -51,7 +52,7 @@ function newState() {
       typing: window.shell && window.shell.phone ? "window" : "global",
       onTop: true,
       zoom: 2,
-      sound: { mode: "typing", clip: 0, volume: 0.8, pitch: 0.5, autoPace: 0.5, bgm: -1, lastBgm: 12, bgmVolume: 0.6 },
+      sound: { mode: "typing", clip: 0, volume: 0.8, pitch: 0.5, autoPace: 0.5, bgm: -1, lastBgm: 12, bgmVolume: 0.6, lpVolume: 0.6 },
     },
     savedAt: Date.now(),
   };
@@ -361,6 +362,7 @@ const game = {
     if (!this.canPlace(id, c, r, extra.a)) return null;
     const p = { id, c, r };
     for (const k of ["color", "a", "food"]) if (extra[k]) p[k] = extra[k];
+    if (extra.lp != null && this.state.lps[extra.lp]) p.lp = extra.lp;   // a turntable keeps its record on
     this.room().placed.push(p);
     this.emit("change");
     return p;
@@ -385,6 +387,30 @@ const game = {
   // Paint the wall or the floor of the room on screen (free, any time).
   paint(surface, color) {
     this.room()[surface === "wall" ? "wallColor" : "floorColor"] = color;
+    this.emit("change");
+  },
+  // ---------- LP records ----------
+
+  buyLp() {
+    const s = this.state;
+    if (!this.pay(LP.price)) return false;
+    const colors = COLOR_ORDER.filter(n => n);
+    s.lps.push({ name: `LP ${s.lps.length + 1}`, url: "", color: colors[s.lps.length * 5 % colors.length] });
+    this.emit("change");
+    return true;
+  },
+  editLp(i, { name, url, color }) {
+    const lp = this.state.lps[i];
+    if (!lp) return;
+    lp.name = String(name || "").trim().slice(0, LP.nameMax) || `LP ${i + 1}`;
+    lp.url = String(url || "").trim();
+    if (COLORS[color] !== undefined) lp.color = color;
+    this.emit("change");
+  },
+  // Put record `i` on a turntable (taking it off any other), or take it off (i = null).
+  putLp(p, i) {
+    for (const q of this.allPlaced()) if (q.lp === i && q !== p) delete q.lp;
+    if (i == null || !this.state.lps[i]) delete p.lp; else p.lp = i;
     this.emit("change");
   },
   store(id) {

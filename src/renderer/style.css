@@ -207,3 +207,7 @@ body.decorating #room { cursor: pointer; touch-action: none; }   /* dragging pie
 .rb { border: 0; background: none; font: inherit; font-size: 9px; padding: 1px 4px; cursor: pointer; color: var(--text); }
 .rb:hover { background: var(--btn-hover); }
 #whereMe { position: absolute; right: 4px; top: 2px; border: 2px solid var(--ink); background: rgba(255, 255, 255, .85); font: inherit; font-size: 10px; line-height: 1.4; padding: 0 4px; cursor: pointer; }
+.lp-row { gap: 4px; padding: 2px 0; }
+.lp-pic { width: 24px; height: 24px; image-rendering: pixelated; flex: none; }
+.lp-edit { display: flex; flex-direction: column; gap: 3px; padding: 3px 0; border-bottom: 1px solid var(--track); }
+.lp-edit input { flex: 1; min-width: 0; font: inherit; border: 2px solid var(--ink); padding: 1px 4px; background: var(--btn); color: var(--text); }

@@ -657,13 +657,14 @@ const room = {
       const toy = this.toys.get(p);
       const x = MX + p.c * T + (p.id === "chair" ? underDesk(p.c, p.r, rm) : 0) + (p.ox || 0) + (toy ? toy.ox : 0), y = FY + p.r * T + (p.oy || 0) + (toy ? toy.oy : 0);
       const turned = toy ? (((p.a || 0) + Math.round(toy.spin / 10) * 10) % 360 + 360) % 360 : p.a;
-      const busy = p.id !== "catwheel" || s.pets.some((pet, i) => !pet.hidden && pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
+      const busy = p.id === "turntable" ? turntable.playing(p) : p.id !== "catwheel" || s.pets.some((pet, i) => !pet.hidden && pets.moves[i] && pets.moves[i].at === p && !pets.moves[i].path);
       const sleeper = f.bed && here && actor.doing === "sleep" && Math.round(actor.x) === p.c && Math.round(actor.y) === p.r;
       items.push({ d: f.walk ? -1 : y + h * T - 1, draw: () => {
         if (sleeper) return this.drawBedWithSleeper(g, p, x, y, night);
         drawPiece(g, p.id, x, y, busy ? t : 0, night, p.color, turned);
         if (p.id === "bowl" && p.food > 0) this.drawFood(g, x, y, p.food);   // a round bowl looks the same turned
         if (p.a) return;
+        if (p.id === "turntable") this.drawRecord(g, p, x, y);
         if (p.id === "feeder" && p.food > 0) this.drawFood(g, x, y + 1, p.food);
         if (p.id === "hideout" || p.id === "doghouse") this.drawPeek(g, p, x, y);
       } });
@@ -740,6 +741,12 @@ const room = {
   drawFood(g, x, y, n) {
     const r = (c, a, b, w, h) => { g.fillStyle = c; g.fillRect(a, b, w, h); };
     for (let k = 0; k < 4 + n * 2; k++) r(k % 2 ? "#8a5a3b" : "#b8834f", x + 4 + (k * 3) % 8, y + 8 - (k % 3 === 0 && n > 1 ? 1 : 0), 2, 1);
+  },
+  // What's on a turntable: an empty platter, or the record's label in its colour.
+  drawRecord(g, p, x, y) {
+    const r = (c, a, b, w, h) => { g.fillStyle = c; g.fillRect(a, b, w, h); }, lp = game.state.lps[p.lp];
+    if (!lp) { r(G4, x + 4, y - 4, 6, 5); r(G4, x + 3, y - 3, 8, 3); r(G3, x + 4, y - 3, 6, 3); r(G1, x + 6, y - 2, 2, 1); return; }
+    r(COLORS[lp.color] || G6, x + 6, y - 2, 2, 1);
   },
   // A pet tucked inside a hideout or dog house: just its eyes in the dark doorway.
   drawPeek(g, p, x, y) {

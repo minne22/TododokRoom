@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld("shell", {
   setAdminAlways: on => ipcRenderer.invoke("set-admin-always", on),
   relaunchAdmin: () => ipcRenderer.invoke("relaunch-admin"),
   onUpdateReady: cb => ipcRenderer.on("update-ready", (_, version) => cb(version)),
+  // The turntable: play a YouTube video ({ v } or { list }) out of sight, change its volume, stop it.
+  lpPlay: (what, volume) => ipcRenderer.send("lp-play", what, volume),
+  lpVolume: v => ipcRenderer.send("lp-volume", v),
+  lpStop: () => ipcRenderer.send("lp-stop"),
+  lpStatus: () => ipcRenderer.invoke("lp-status"),
   minimize: () => ipcRenderer.send("minimize"),
   quit: () => ipcRenderer.send("quit"),
 });
