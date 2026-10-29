@@ -1,7 +1,7 @@
 {
   "name": "todokroom",
   "productName": "토도독 룸",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "description": "화면 모서리에 띄워 두는 타자 소리 방꾸미기",
   "author": "토도독",
   "main": "src/main.js",

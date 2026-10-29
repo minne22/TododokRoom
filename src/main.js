@@ -179,8 +179,9 @@ ipcMain.on("lp-play", (_, what, volume) => {
   player.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   player.webContents.on("will-navigate", e => e.preventDefault());
   player.webContents.on("did-finish-load", () => setPlayerVolume(playerVolume));
+  // A single video plays once (the page decides what comes next); a YouTube playlist goes round.
   const url = what.v
-    ? `https://www.youtube.com/embed/${what.v}?autoplay=1&loop=1&playlist=${what.v}`
+    ? `https://www.youtube.com/embed/${what.v}?autoplay=1`
     : `https://www.youtube.com/embed/videoseries?list=${what.list}&autoplay=1&loop=1`;
   // YouTube only plays embedded videos for a page that says where it is.
   player.loadURL(url, { httpReferrer: "https://github.com/minne22/TododokRoom" }).catch(() => {});
@@ -191,17 +192,32 @@ function setPlayerVolume(v) {
   if (player && !player.isDestroyed()) player.webContents.executeJavaScript(`document.querySelectorAll("video").forEach(v => v.volume = ${playerVolume})`).catch(() => {});
 }
 ipcMain.on("lp-volume", (_, v) => setPlayerVolume(v));
-// What's playing: { on, playing, title, error } (error: what YouTube shows instead, e.g. for a
-// video that may not be played elsewhere).
+// Pause, play on, jump to a second (seek) or by some seconds (skip). A pause sticks: the status
+// check below otherwise nudges a stalled video back into playing.
+ipcMain.on("lp-control", (_, act, n) => {
+  if (!player || player.isDestroyed()) return;
+  const x = Number(n) || 0;
+  const js = {
+    pause: `window.__held = true; v.pause();`,
+    play: `window.__held = false; v.play().catch(() => {});`,
+    seek: `v.currentTime = Math.max(0, ${x});`,
+    skip: `v.currentTime = Math.max(0, Math.min((v.duration || 1e9) - 0.5, v.currentTime + ${x}));`,
+  }[act];
+  if (js) player.webContents.executeJavaScript(`(() => { const v = document.querySelector("video"); if (v) { ${js} } })()`).catch(() => {});
+});
+// What's playing: { on, playing, paused, ended, at, dur (seconds), title, error } (error: what
+// YouTube shows instead, e.g. for a video that may not be played elsewhere).
 ipcMain.handle("lp-status", async () => {
   if (!player || player.isDestroyed()) return { on: false };
   try {
     return { on: true, ...await player.webContents.executeJavaScript(`(() => {
       const v = document.querySelector("video"), err = document.querySelector(".ytp-error, .ytp-error-content-wrap-reason");
-      if (v) { v.volume = ${playerVolume}; if (v.paused && v.readyState > 2) v.play().catch(() => {}); }
+      if (v) { v.volume = ${playerVolume}; if (v.paused && !v.ended && !window.__held && v.readyState > 2) v.play().catch(() => {}); }
       const t = document.querySelector(".ytp-title-link"), title = (t && t.textContent.trim()) || document.title.replace(/ - YouTube$/, "");
-      return { playing: !!v && !v.paused, title: title === "YouTube" ? "" : title, ad: !!document.querySelector(".ad-showing"),
-        at: v ? Math.round(v.currentTime) : 0, error: err ? err.textContent.trim() : "" };
+      const ad = !!document.querySelector(".ad-showing");
+      return { playing: !!v && !v.paused, paused: !!window.__held, ended: !!v && v.ended && !ad, ad,
+        title: title === "YouTube" ? "" : title, at: v ? v.currentTime : 0, dur: v && isFinite(v.duration) && !ad ? v.duration : 0,
+        error: err ? err.textContent.trim() : "" };
     })()`) };
   } catch (e) { return { on: true, playing: false }; }
 });

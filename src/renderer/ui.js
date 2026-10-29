@@ -82,14 +82,19 @@ const ui = {
       if (e.key === "Enter" && e.target.id === "roomRename") $("#panelBody [data-act=roomRenameSave]").click();
       if (e.key === "Escape" && e.target.id === "roomRename") { e.stopPropagation(); this.roomEdit = null; this.render(); }
       if (e.key === "Enter" && (e.target.id === "lpName" || e.target.id === "lpUrl")) $("#panelBody [data-act=lpEditSave]").click();
+      if (e.key === "Enter" && e.target.id === "lpListName") $("#panelBody [data-act=lpListSave]").click();
       if (e.key === "Escape" && (e.target.id === "lpName" || e.target.id === "lpUrl")) { e.stopPropagation(); this.lpEdit = null; this.render(); }
     });
     for (const el of ["#panelBody", "#panelTabs"]) $(el).addEventListener("change", e => { if (e.target.dataset.sel) this.pick(e.target.dataset.sel, e.target.value); });
+    $("#panelBody").addEventListener("change", e => { if (e.target.id === "lpSeek") { this.lpSeeking = false; turntable.control("seek", +e.target.value); } });
     $("#panelBody").addEventListener("input", e => {
       if (e.target.id === "lookName") this.draft.name = e.target.value;
       if (e.target.id === "lpName" && this.lpEdit) this.lpEdit.name = e.target.value;
       if (e.target.id === "lpUrl" && this.lpEdit) this.lpEdit.url = e.target.value;
       if (e.target.id === "lpVolume") turntable.setVolume(e.target.value / 100);
+      if (e.target.id === "lpListName" && this.lpListEdit) this.lpListEdit.name = e.target.value;
+      // Dragging along the bar: the time follows, and the music jumps there on letting go.
+      if (e.target.id === "lpSeek") { this.lpSeeking = true; const t = +e.target.value; $("#lpAt").textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; }
       if (e.target.id === "petName") {
         this.adopt.name = e.target.value;
         const b = $("#panelBody [data-act=adopt]");
@@ -333,9 +338,18 @@ const ui = {
     const p = this.lpPiece();
     if (!turntable.playing(p)) return p && game.state.lps[p.lp] ? "멈춤" : "LP판을 올려 주세요";
     const st = turntable.status || {};
-    return st.title ? `♪ ${esc(st.title)}` : "불러오는 중…";
+    return st.ad ? "광고가 끝나면 시작합니다…" : st.title ? `${st.paused ? "일시정지" : "♪"} ${esc(st.title)}` : "불러오는 중…";
   },
-  lpStatusChanged() { const el = $("#lpNow"); if (el) el.innerHTML = this.lpNowText(); },
+  lpStatusChanged() {
+    const el = $("#lpNow");
+    if (!el) return;
+    el.innerHTML = this.lpNowText();
+    const st = turntable.status || {}, time = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+    const seek = $("#lpSeek"), pause = $("#lpPause");
+    if (seek && !this.lpSeeking) { seek.max = Math.max(1, Math.floor(st.dur || 0)); seek.value = Math.floor(st.at || 0); $("#lpAt").textContent = time(st.at || 0); }
+    if (seek) $("#lpDur").textContent = time(st.dur || 0);
+    if (pause) { pause.textContent = st.paused ? "재생" : "일시정지"; pause.classList.toggle("on", !st.paused); }
+  },
   lpHtml() {
     const s = game.state, p = this.lpPiece(), on = p && s.lps[p.lp], playing = turntable.playing(p), edit = this.lpEdit;
     const where = p && game.allPlaced().filter(q => q.id === "turntable").length > 1 ? ` · ${esc(game.roomName(s.rooms.findIndex(r => r.placed.includes(p))))}` : "";
@@ -343,6 +357,8 @@ const ui = {
       : `<div class="card"><div class="title">지금 턴테이블${where}</div>
         <div class="row lp-row"><img class="lp-pic" src="${lpIcon(on ? on.color : 0)}" alt=""><div class="grow"><b>${on ? esc(on.name) : "비어 있음"}</b><div class="desc" id="lpNow">${this.lpNowText()}</div></div>
           ${on ? `${playing ? `<button class="btn small" data-act="lpStop">정지</button>` : `<button class="btn small on" data-act="lpPlay">재생</button>`}<button class="btn small" data-act="lpOff">빼기</button>` : ""}</div>
+        ${playing ? `<div class="lp-bar"><span id="lpAt">0:00</span><input type="range" id="lpSeek" min="0" max="1" step="1" value="0" aria-label="재생 위치"><span id="lpDur">0:00</span></div>
+        <div class="lp-ctl"><button class="btn small" data-act="lpSkip" data-id="-10">◀◀ 10초</button><button class="btn small on" id="lpPause" data-act="lpPause">일시정지</button><button class="btn small" data-act="lpSkip" data-id="10">10초 ▶▶</button><button class="btn small" data-act="lpNext">다음 LP ▶|</button></div>` : ""}
         <div class="slider-row"><span class="label">볼륨</span><input type="range" id="lpVolume" min="0" max="100" value="${Math.round(s.settings.sound.lpVolume * 100)}" aria-label="턴테이블 볼륨"></div></div>`;
     const rows = s.lps.map((lp, i) => edit && edit.i === i
       ? `<div class="lp-edit"><div class="row lp-row"><img class="lp-pic" src="${lpIcon(edit.color)}" alt=""><input id="lpName" maxlength="${LP.nameMax}" value="${esc(edit.name)}" placeholder="LP 이름" aria-label="LP 이름"></div>
@@ -351,9 +367,23 @@ const ui = {
           <div class="row"><span class="grow"></span><button class="btn small" data-act="lpEditCancel">취소</button><button class="btn small on" data-act="lpEditSave">저장</button></div></div>`
       : `<div class="row lp-row"><img class="lp-pic" src="${lpIcon(lp.color)}" alt=""><div class="grow"><b>${esc(lp.name)}</b><div class="desc">${!lp.url ? "링크 없음" : parseYouTube(lp.url) ? "유튜브 링크" : "링크를 확인해 주세요"}</div></div>
           ${!p ? "" : p.lp === i ? `<span class="tag">올려 둠</span>` : `<button class="btn small" data-act="lpOn" data-id="${i}">올리기</button>`}<button class="btn small" data-act="lpEdit" data-id="${i}">편집</button></div>`).join("");
-    return now + `<div class="card"><div class="title">내 LP판 · ${s.lps.length}장</div>${rows || `<div class="desc">아직 LP판이 없습니다.</div>`}
+    return now + this.lpListsHtml(p) + `<div class="card"><div class="title">내 LP판 · ${s.lps.length}장</div>${rows || `<div class="desc">아직 LP판이 없습니다.</div>`}
         <div class="row"><b>새 LP판</b>${priceHtml(LP.price)}<span class="grow"></span>${buyBtn("사기", "lpBuy", "", LP.price)}</div></div>
       <div class="desc">LP판마다 유튜브 영상이나 재생목록 링크를 넣어 두고, 턴테이블에 올리면 그 음악이 나옵니다. 영상은 보이지 않고 소리만 나오며, 끝나면 처음부터 다시 돕니다. 재생하는 동안 배경음은 잠시 쉽니다.</div>`;
+  },
+  // Playlists: play one on the turntable, or make / change one by picking records in order.
+  lpListsHtml(p) {
+    const s = game.state, ed = this.lpListEdit, q = turntable.queue && turntable.playing(p) ? turntable.queue : null;
+    const editor = k => `<div class="lp-edit"><input id="lpListName" maxlength="${LP.nameMax}" value="${esc(ed.name)}" placeholder="플레이리스트 이름" aria-label="플레이리스트 이름">
+      <div class="desc">담을 LP판을 순서대로 누르세요. 다시 누르면 빠집니다.</div>
+      <div class="lp-picks">${s.lps.map((lp, i) => { const n = ed.items.indexOf(i); return `<button class="btn small${n >= 0 ? " on" : ""}" data-act="lpListToggle" data-id="${i}">${n >= 0 ? `${n + 1}. ` : ""}${esc(lp.name)}</button>`; }).join("")}</div>
+      <div class="row">${k >= 0 ? `<button class="btn small danger" data-act="lpListDelete" data-id="${k}">삭제</button>` : ""}<span class="grow"></span><button class="btn small" data-act="lpListCancel">취소</button><button class="btn small on" data-act="lpListSave">저장</button></div></div>`;
+    const rows = s.lpLists.map((list, k) => ed && ed.k === k ? editor(k)
+      : `<div class="row lp-row"><div class="grow"><b>${esc(list.name)}</b><div class="desc">${list.items.length ? list.items.map(i => esc(s.lps[i] ? s.lps[i].name : "")).join(" → ") : "비어 있음"}</div></div>
+        ${q && q.list === k ? `<span class="tag">${q.pos + 1}/${list.items.length}</span>` : p ? `<button class="btn small" data-act="lpListPlay" data-id="${k}"${list.items.length ? "" : " disabled"}>틀기</button>` : ""}<button class="btn small" data-act="lpListEdit" data-id="${k}">편집</button></div>`).join("");
+    return `<div class="card"><div class="title">플레이리스트 · ${s.lpLists.length}개</div>${rows || (ed ? "" : `<div class="desc">LP판 여러 장을 담아 차례로 들을 수 있습니다.</div>`)}
+      ${ed && ed.k < 0 ? editor(-1) : ""}
+      ${ed ? "" : `<div class="row"><span class="grow"></span><button class="btn small" data-act="lpListNew"${s.lps.length ? "" : " disabled"}>새 플레이리스트</button></div>`}</div>`;
   },
   lpEditStart(i) {
     const lp = game.state.lps[i];
@@ -806,6 +836,36 @@ const ui = {
       case "lpOff": { const p = this.lpPiece(); if (p) { if (turntable.playing(p)) turntable.stop(); game.putLp(p, null); } break; }
       case "lpPlay": { const p = this.lpPiece(); if (p) this.lpStart(p); break; }
       case "lpStop": turntable.stop(); break;
+      case "lpPause": turntable.togglePause(); break;
+      case "lpSkip": turntable.control("skip", +id); break;
+      case "lpNext": turntable.next(); break;
+      case "lpListNew": this.lpListEdit = { k: -1, name: "", items: [] }; this.render(); setTimeout(() => { const el = $("#lpListName"); if (el) el.focus(); }); break;
+      case "lpListEdit": { const l = s.lpLists[+id]; this.lpListEdit = { k: +id, name: l.name, items: [...l.items] }; this.render(); break; }
+      case "lpListToggle": {
+        const ed = this.lpListEdit, i = +id;
+        if (!ed) break;
+        ed.items = ed.items.includes(i) ? ed.items.filter(x => x !== i) : [...ed.items, i];
+        this.render();
+        break;
+      }
+      case "lpListCancel": this.lpListEdit = null; this.render(); break;
+      case "lpListSave": {
+        const ed = this.lpListEdit;
+        if (!ed) break;
+        if (!ed.items.length) { this.toast("LP판을 한 장 이상 담아 주세요.", 2500); break; }
+        this.lpListEdit = null;
+        game.saveLpList(ed.k, ed);
+        this.render();
+        break;
+      }
+      case "lpListDelete": {
+        const k = +id, q = turntable.queue;
+        if (q) { if (q.list === k) turntable.queue = null; else if (q.list > k) q.list--; }
+        this.lpListEdit = null;
+        game.deleteLpList(k);
+        break;
+      }
+      case "lpListPlay": { const p = this.lpPiece(); if (p) { const ok = turntable.playList(p, +id); if (ok !== true) this.toast(ok, 3000); } break; }
       case "paintPiece": {
         const sel = room.deco && room.deco.selected;
         if (!sel || !game.room().placed.includes(sel)) break;

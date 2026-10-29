@@ -211,3 +211,7 @@ body.decorating #room { cursor: pointer; touch-action: none; }   /* dragging pie
 .lp-pic { width: 24px; height: 24px; image-rendering: pixelated; flex: none; }
 .lp-edit { display: flex; flex-direction: column; gap: 3px; padding: 3px 0; border-bottom: 1px solid var(--track); }
 .lp-edit input { flex: 1; min-width: 0; font: inherit; border: 2px solid var(--ink); padding: 1px 4px; background: var(--btn); color: var(--text); }
+.lp-bar { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--sub); }
+.lp-bar input[type=range] { flex: 1; min-width: 0; accent-color: var(--on); cursor: pointer; }
+.lp-ctl { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; padding: 2px 0; }
+.lp-picks { display: flex; flex-wrap: wrap; gap: 3px; }

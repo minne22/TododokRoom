@@ -45,6 +45,7 @@ function newState() {
     pets: [],            // { kind: "cat" | "dog", color, name, full (0–100), giftIn (seconds), acc (worn accessory), hidden }
     petAcc: [],          // accessories bought for pets
     lps: [],             // LP records: { name, url (YouTube link), color (label, index into COLORS) }
+    lpLists: [],         // playlists of LP records: { name, items (indices into lps, in order) }
     food: 3,             // bags of pet food
     settings: {
       // "global" (whole PC / phone) | "window" (only while this window has focus). On the phone,
@@ -405,6 +406,17 @@ const game = {
     lp.name = String(name || "").trim().slice(0, LP.nameMax) || `LP ${i + 1}`;
     lp.url = String(url || "").trim();
     if (COLORS[color] !== undefined) lp.color = color;
+    this.emit("change");
+  },
+  // Make (k < 0) or change playlist `k`; returns its index.
+  saveLpList(k, { name, items }) {
+    const s = this.state, list = { name: String(name || "").trim().slice(0, LP.nameMax) || `플레이리스트 ${k < 0 ? s.lpLists.length + 1 : k + 1}`, items: items.filter(i => s.lps[i]) };
+    if (k < 0 || !s.lpLists[k]) { s.lpLists.push(list); k = s.lpLists.length - 1; } else s.lpLists[k] = list;
+    this.emit("change");
+    return k;
+  },
+  deleteLpList(k) {
+    this.state.lpLists.splice(k, 1);
     this.emit("change");
   },
   // Put record `i` on a turntable (taking it off any other), or take it off (i = null).

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("shell", {
   lpPlay: (what, volume) => ipcRenderer.send("lp-play", what, volume),
   lpVolume: v => ipcRenderer.send("lp-volume", v),
   lpStop: () => ipcRenderer.send("lp-stop"),
+  lpControl: (act, n) => ipcRenderer.send("lp-control", act, n),   // "pause" | "play" | "seek" (to n s) | "skip" (by n s)
   lpStatus: () => ipcRenderer.invoke("lp-status"),
   minimize: () => ipcRenderer.send("minimize"),
   quit: () => ipcRenderer.send("quit"),

@@ -21,30 +21,32 @@ function parseYouTube(text) {
 
 const turntable = {
   piece: null,       // the placed turntable playing
-  status: null,      // { playing, title, error } from the player
+  status: null,      // { playing, paused, ended, at, dur, title, error } from the player
+  queue: null,       // playing one of the playlists: { list (index into lpLists), pos }
   bgmBefore: null,   // the background music that was on before the record started
   timer: null,
 
   can() { return !!(window.shell && window.shell.lpPlay); },
-  // Play the record on turntable `p`. Returns false (and why) when it can't.
-  play(p) {
+  // Play the record on turntable `p` (as part of playlist `queue`, or on its own). Returns true, or
+  // why it can't.
+  play(p, queue = null) {
     const lp = game.state.lps[p.lp], what = lp && parseYouTube(lp.url);
     if (!lp) return "LP판을 먼저 올려 주세요.";
     if (!what) return "이 LP판에 유튜브 링크가 없습니다. 편집에서 링크를 넣어 주세요.";
     if (!this.can()) return "음악 재생은 PC에서만 됩니다.";
     const so = game.state.settings.sound;
     if (!this.piece && so.bgm >= 0) { this.bgmBefore = so.bgm; so.lastBgm = so.bgm; so.bgm = -1; }
-    this.piece = p;
-    this.status = { playing: false, title: "", error: "" };
+    this.piece = p; this.queue = queue;
+    this.status = { playing: false, title: "", error: "", at: 0, dur: 0 };
     window.shell.lpPlay(what, so.lpVolume);
     clearInterval(this.timer);
-    this.timer = setInterval(() => this.check(), 1500);
+    this.timer = setInterval(() => this.check(), 1000);
     game.emit("change");
     return true;
   },
   stop() {
     if (!this.piece) return;
-    this.piece = null; this.status = null;
+    this.piece = null; this.status = null; this.queue = null;
     clearInterval(this.timer); this.timer = null;
     if (window.shell && window.shell.lpStop) window.shell.lpStop();
     const so = game.state.settings.sound;
@@ -52,13 +54,50 @@ const turntable = {
     this.bgmBefore = null;
     game.emit("change");
   },
+  // "pause" | "play" | "seek" (to n seconds) | "skip" (by n seconds).
+  control(act, n) {
+    if (!this.piece || !window.shell.lpControl) return;
+    window.shell.lpControl(act, n);
+    const st = this.status || {};
+    if (act === "pause") Object.assign(st, { paused: true, playing: false });
+    if (act === "play") Object.assign(st, { paused: false, playing: true });
+    if (act === "seek") st.at = n;
+    if (act === "skip") st.at = Math.max(0, Math.min(st.dur || 1e9, (st.at || 0) + n));
+    ui.lpStatusChanged();
+  },
+  togglePause() { this.control(this.status && this.status.paused ? "play" : "pause"); },
+  // The next record: the playlist's next (round again at its end), or else the next record with a
+  // link. A record on its own with nothing after it starts over.
+  next() {
+    const p = this.piece, s = game.state;
+    if (!p) return;
+    const list = this.queue && s.lpLists[this.queue.list];
+    if (list && list.items.length) {
+      const pos = (this.queue.pos + 1) % list.items.length;
+      game.putLp(p, list.items[pos]);
+      return this.play(p, { list: this.queue.list, pos });
+    }
+    const n = s.lps.length;
+    for (let k = 1; k <= n; k++) {
+      const i = ((p.lp || 0) + k) % n;
+      if (i !== p.lp && parseYouTube(s.lps[i].url)) { game.putLp(p, i); return this.play(p); }
+    }
+    this.control("seek", 0); this.control("play");
+  },
+  // Play playlist `k` on turntable `p` from its first record.
+  playList(p, k) {
+    const list = game.state.lpLists[k];
+    if (!list || !list.items.length) return "플레이리스트가 비어 있습니다.";
+    game.putLp(p, list.items[0]);
+    return this.play(p, { list: k, pos: 0 });
+  },
   setVolume(v) {
     game.state.settings.sound.lpVolume = v;
     if (this.piece && window.shell.lpVolume) window.shell.lpVolume(v);
   },
   playing(p) { return !!p && this.piece === p; },
-  // Keep an eye on the player: a turntable put away (or its record taken off) stops the music, and
-  // a video YouTube won't play here says so.
+  // Keep an eye on the player: a turntable put away (or its record taken off) stops the music, a
+  // record that's done moves on, and a video YouTube won't play here says so.
   async check() {
     const p = this.piece;
     if (!p) return;
@@ -66,10 +105,10 @@ const turntable = {
     const st = await window.shell.lpStatus();
     if (this.piece !== p) return;
     if (!st.on) return this.stop();
-    const was = this.status || {};
-    this.status = st;
     if (st.error) { ui.toast("이 영상은 여기서 재생할 수 없습니다. 다른 링크를 넣어 보세요.", 4000); return this.stop(); }
-    if (st.title !== was.title || st.playing !== was.playing) ui.lpStatusChanged();
+    this.status = st;
+    if (st.ended) return this.next();
+    ui.lpStatusChanged();
   },
 };
 
